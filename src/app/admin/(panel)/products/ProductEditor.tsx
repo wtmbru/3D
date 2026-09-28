@@ -12,12 +12,13 @@ import { aliasModelFile, layoutProduct, loadProductGeometry } from "@/lib/three/
 import type { ColorConfig, MaterialFamily, PartTransform, Product, ProductPart } from "@/lib/types";
 import { import3mf, type Imported3mf } from "@/lib/three/threemf";
 import { AssemblyEditor } from "./AssemblyEditor";
-import { measure as measureGroups, toStlFile, type ImportGroup } from "./from3mf";
+import { allocateBudget, PRODUCT_TRIANGLE_BUDGET, prepareModel } from "@/lib/three/meshprep";
+import { measure as measureGroups, type ImportGroup } from "./from3mf";
 import { Import3mfDialog } from "./Import3mfDialog";
 import { deleteProduct, saveProduct } from "../../actions";
 import { Notice, Switch, useNotice } from "../ui";
 import { ColorSelect } from "./ColorSelect";
-import { inspectStl, nameFromFile, slugify, uploadFile } from "./upload";
+import { nameFromFile, readStl, slugify, uploadFile } from "./upload";
 
 interface Upload {
   key: string;
@@ -42,6 +43,7 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
   const [arranging, setArranging] = useState(false);
   const [pending3mf, setPending3mf] = useState<{ model: Imported3mf; fileName: string } | null>(null);
   const [reading3mf, setReading3mf] = useState(false);
+  const [optimizing, setOptimizing] = useState(false);
   // Background STL uploads per part. The preview uses the local file meanwhile.
   const [partUploads, setPartUploads] = useState<Record<string, { progress: number; error?: string }>>({});
   const localFiles = useRef(new Map<string, File>());
@@ -131,15 +133,20 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
     const taken = new Set(p.parts.map((x) => x.id));
     let index = p.parts.length;
 
+    const read: { file: File; positions: Float32Array }[] = [];
     for (const file of stls) {
       try {
-        await inspectStl(file);
+        read.push({ file, positions: await readStl(file) });
       } catch (e) {
         problems.push(e instanceof Error ? e.message : `${file.name} couldn't be read.`);
-        continue;
       }
-      // Show it right away from the local file; upload in the background.
-      const localUrl = URL.createObjectURL(file);
+    }
+    const budgets = allocateBudget(read.map((r) => r.positions.length / 9));
+    setOptimizing(true);
+    for (const [i, { file, positions }] of read.entries()) {
+      // Simplify huge meshes and compress, then show it right away; upload in the background.
+      const prepared = await prepareModel(positions, slugify(file.name.replace(/\.stl$/i, "")), budgets[i]);
+      const localUrl = URL.createObjectURL(prepared.file);
       const part: ProductPart = {
         id: nextPartId(file.name.replace(/\.stl$/i, ""), taken),
         name: nameFromFile(file.name),
@@ -147,25 +154,36 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
         defaultFilament: suggestColor(index++),
       };
       setP((prev) => ({ ...prev, parts: [...prev.parts, part] }));
-      startPartUpload(part.id, file, localUrl);
+      startPartUpload(part.id, prepared.file, localUrl);
     }
+    setOptimizing(false);
     if (problems.length) setNotice({ kind: "error", text: problems.join(" ") });
   }
 
   /** Replace all parts with the groups from a .3mf, then upload them in the background. */
-  function apply3mf(groups: ImportGroup[], title?: string) {
+  async function apply3mf(groups: ImportGroup[], title?: string) {
+    setOptimizing(true);
     const taken = new Set<string>();
-    const created = groups.map((g) => {
-      const file = toStlFile(g.positions, `${slugify(g.name) || "part"}.stl`);
-      const part: ProductPart = {
-        id: nextPartId(g.name, taken),
-        name: g.name,
-        file: URL.createObjectURL(file),
-        defaultFilament: g.filamentId,
-        ...(g.plate > 1 ? { plate: g.plate } : {}),
-      };
-      return { part, file };
-    });
+    const budgets = allocateBudget(groups.map((g) => g.triangles));
+    const created: { part: ProductPart; file: File }[] = [];
+    let before = 0;
+    let after = 0;
+    for (const [i, g] of groups.entries()) {
+      const prepared = await prepareModel(g.positions, slugify(g.name), budgets[i]);
+      before += prepared.trianglesBefore;
+      after += prepared.trianglesAfter;
+      created.push({
+        file: prepared.file,
+        part: {
+          id: nextPartId(g.name, taken),
+          name: g.name,
+          file: URL.createObjectURL(prepared.file),
+          defaultFilament: g.filamentId,
+          ...(g.plate > 1 ? { plate: g.plate } : {}),
+        },
+      });
+    }
+    setOptimizing(false);
     for (const id of localFiles.current.keys()) localFiles.current.delete(id);
     setPartUploads({});
     setP((prev) => ({
@@ -181,20 +199,27 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
     setActivePart(null);
     setPending3mf(null);
     for (const { part, file } of created) startPartUpload(part.id, file, part.file);
-    setNotice({ kind: "ok", text: `Imported ${created.length} parts. Name them and check the colors.` });
+    const simplified =
+      after < before
+        ? ` Detail was reduced from ${fmtCount(before)} to ${fmtCount(after)} triangles so it loads fast (prints aren't affected).`
+        : "";
+    setNotice({ kind: "ok", text: `Imported ${created.length} parts.${simplified} Name them and check the colors.` });
   }
 
   async function replacePartFile(partId: string, file: File) {
+    let positions: Float32Array;
     try {
-      await inspectStl(file);
+      positions = await readStl(file);
     } catch (e) {
       setNotice({ kind: "error", text: e instanceof Error ? e.message : "That file couldn't be read." });
       return;
     }
-    const localUrl = URL.createObjectURL(file);
+    const budget = Math.floor(PRODUCT_TRIANGLE_BUDGET / Math.max(p.parts.length, 1));
+    const prepared = await prepareModel(positions, slugify(file.name.replace(/\.stl$/i, "")), budget);
+    const localUrl = URL.createObjectURL(prepared.file);
     // The new file has its own geometry, so the old placement no longer applies.
     updatePart(partId, { file: localUrl, transform: undefined });
-    startPartUpload(partId, file, localUrl);
+    startPartUpload(partId, prepared.file, localUrl);
   }
 
   function setTransforms(transforms: Record<string, PartTransform | undefined>) {
@@ -601,7 +626,7 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
 
             <DropZone
               accept=".stl,.3mf"
-              label={reading3mf ? "Reading project…" : "Drop a Bambu Studio .3mf or STL files here"}
+              label={reading3mf ? "Reading project…" : optimizing ? "Optimizing models…" : "Drop a Bambu Studio .3mf or STL files here"}
               hint="A .3mf brings in every part, its filament colors, plates and painting. STLs add one part each (up to 50 MB)."
               onFiles={addModelFiles}
             />
@@ -780,6 +805,7 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
           family={family}
           replacing={p.parts.length}
           onCancel={() => setPending3mf(null)}
+          busy={optimizing}
           onImport={(groups) => apply3mf(groups, pending3mf.model.title)}
         />
       )}
@@ -859,6 +885,8 @@ function DropZone({ accept, label, hint, onFiles }: { accept: string; label: str
     </div>
   );
 }
+
+const fmtCount = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : `${Math.round(n / 1000)}k`);
 
 function omit<T>(record: Record<string, T>, key: string): Record<string, T> {
   const { [key]: _omitted, ...rest } = record; // eslint-disable-line @typescript-eslint/no-unused-vars

@@ -3,25 +3,16 @@
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { createUploadUrl } from "../../actions";
 
-export interface StlInfo {
-  triangles: number;
-  /** Bounding box size in mm (x, y, z as exported). */
-  size: [number, number, number];
-}
-
-/** Parse the STL locally so broken files are caught before uploading. */
-export async function inspectStl(file: File): Promise<StlInfo> {
+/** Parse an STL locally (catches broken files before upload); returns its triangle soup. */
+export async function readStl(file: File): Promise<Float32Array> {
   const geo = new STLLoader().parse(await file.arrayBuffer());
-  const triangles = (geo.getAttribute("position")?.count ?? 0) / 3;
-  if (!triangles) throw new Error(`${file.name} doesn't contain any triangles. Is it a valid STL?`);
-  geo.computeBoundingBox();
-  const box = geo.boundingBox!;
-  const size: StlInfo["size"] = [box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z];
-  geo.dispose();
-  return { triangles, size };
+  const positions = geo.getAttribute("position")?.array as Float32Array | undefined;
+  if (!positions?.length) throw new Error(`${file.name} doesn't contain any triangles. Is it a valid STL?`);
+  return positions;
 }
 
 const contentTypes: Record<string, string> = {
+  gz: "application/octet-stream",
   stl: "model/stl",
   jpg: "image/jpeg",
   jpeg: "image/jpeg",

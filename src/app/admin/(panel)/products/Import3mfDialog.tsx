@@ -13,6 +13,7 @@ export function Import3mfDialog({
   fileName,
   family,
   replacing,
+  busy,
   onCancel,
   onImport,
 }: {
@@ -20,6 +21,7 @@ export function Import3mfDialog({
   fileName: string;
   family: MaterialFamily;
   replacing: number;
+  busy?: boolean;
   onCancel: () => void;
   onImport: (groups: ImportGroup[]) => void;
 }) {
@@ -125,9 +127,10 @@ export function Import3mfDialog({
           <button
             type="button"
             className="btn btn-primary btn-sm"
+            disabled={busy}
             onClick={() => onImport(groups.map((g) => ({ ...g, filamentId: colors[g.key] ?? g.filamentId })))}
           >
-            Import {groups.length} {groups.length === 1 ? "part" : "parts"}
+            {busy ? "Optimizing…" : `Import ${groups.length} ${groups.length === 1 ? "part" : "parts"}`}
           </button>
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => ref.current?.close()}>
             Cancel

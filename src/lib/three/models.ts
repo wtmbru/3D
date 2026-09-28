@@ -1,3 +1,4 @@
+import { gunzipSync } from "fflate";
 import * as THREE from "three";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { toCreasedNormals } from "three/examples/jsm/utils/BufferGeometryUtils.js";
@@ -33,7 +34,10 @@ function loadPart(url: string, upAxis: "z" | "y"): Promise<THREE.BufferGeometry>
     pending = (async () => {
       const res = await fetch(url);
       if (!res.ok) throw new Error(`Failed to load ${url}: ${res.status}`);
-      const raw = stlLoader.parse(await res.arrayBuffer());
+      let bytes = new Uint8Array(await res.arrayBuffer());
+      // Uploaded models are gzipped STLs (see meshprep.ts); older/sample ones are plain.
+      if (bytes[0] === 0x1f && bytes[1] === 0x8b) bytes = gunzipSync(bytes);
+      const raw = stlLoader.parse(bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer);
       if (upAxis === "z") raw.rotateX(-Math.PI / 2);
       const geo = toCreasedNormals(raw, CREASE_ANGLE);
       raw.dispose();

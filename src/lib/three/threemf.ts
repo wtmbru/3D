@@ -352,6 +352,30 @@ function readSlots(zip: Record<string, Uint8Array>): ImportedSlot[] {
 
 // ── Import ───────────────────────────────────────────────────────────────────
 
+/** Append-only Float32 buffer (painted models can reach millions of triangles). */
+class Floats {
+  private data = new Float32Array(9 * 1024);
+  length = 0;
+  push9(t: [V3, V3, V3]) {
+    if (this.length + 9 > this.data.length) {
+      const bigger = new Float32Array(this.data.length * 2);
+      bigger.set(this.data);
+      this.data = bigger;
+    }
+    const d = this.data;
+    let o = this.length;
+    for (const v of t) {
+      d[o++] = v[0];
+      d[o++] = v[1];
+      d[o++] = v[2];
+    }
+    this.length = o;
+  }
+  toArray() {
+    return this.data.slice(0, this.length);
+  }
+}
+
 /** Normal parts only: skip modifiers, support blockers/enforcers and negative volumes. */
 const isSolid = (subtype?: string) => !subtype || subtype === "normal_part" || subtype === "modelpart";
 
@@ -391,12 +415,12 @@ export async function import3mf(file: File): Promise<Imported3mf> {
     return s.slot;
   };
 
-  const regions = new Map<string, { meta: Omit<ImportedRegion, "positions">; out: number[] }>();
+  const regions = new Map<string, { meta: Omit<ImportedRegion, "positions">; out: Floats }>();
   const add = (meta: Omit<ImportedRegion, "positions">, t: [V3, V3, V3]) => {
     const key = `${meta.sourceKey}|${meta.slot}|${meta.painted}`;
     let r = regions.get(key);
-    if (!r) regions.set(key, (r = { meta, out: [] }));
-    r.out.push(...t[0], ...t[1], ...t[2]);
+    if (!r) regions.set(key, (r = { meta, out: new Floats() }));
+    r.out.push9(t);
   };
 
   let paintFailures = 0;
@@ -489,7 +513,7 @@ export async function import3mf(file: File): Promise<Imported3mf> {
   if (!regions.size) throw new Error("No printable parts were found in this .3mf.");
 
   // Lay plates side by side: slicers place plate 2+ far away in world space.
-  const out = [...regions.values()].map(({ meta, out }) => ({ ...meta, positions: new Float32Array(out) }));
+  const out = [...regions.values()].map(({ meta, out }) => ({ ...meta, positions: out.toArray() }));
   const plates = [...new Set(out.map((r) => r.plate))].sort((a, b) => a - b);
   if (plates.length > 1) {
     let cursor = 0;

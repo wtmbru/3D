@@ -72,31 +72,6 @@ export function groupRegions(model: Imported3mf, grouping: Grouping, catalog: Ca
     .sort((a, b) => a.plate - b.plate || a.slot - b.slot || b.triangles - a.triangles);
 }
 
-/** Binary STL from a triangle soup (xyz per vertex, 3 vertices per triangle). */
-export function toStlFile(positions: Float32Array, filename: string): File {
-  const count = positions.length / 9;
-  const buffer = new ArrayBuffer(84 + count * 50);
-  const view = new DataView(buffer);
-  view.setUint32(80, count, true);
-  let o = 84;
-  for (let t = 0; t < count; t++) {
-    const p = t * 9;
-    const ax = positions[p + 3] - positions[p], ay = positions[p + 4] - positions[p + 1], az = positions[p + 5] - positions[p + 2];
-    const bx = positions[p + 6] - positions[p], by = positions[p + 7] - positions[p + 1], bz = positions[p + 8] - positions[p + 2];
-    let nx = ay * bz - az * by, ny = az * bx - ax * bz, nz = ax * by - ay * bx;
-    const len = Math.hypot(nx, ny, nz) || 1;
-    nx /= len;
-    ny /= len;
-    nz /= len;
-    view.setFloat32(o, nx, true);
-    view.setFloat32(o + 4, ny, true);
-    view.setFloat32(o + 8, nz, true);
-    for (let i = 0; i < 9; i++) view.setFloat32(o + 12 + i * 4, positions[p + i], true);
-    o += 50;
-  }
-  return new File([buffer], filename, { type: "model/stl" });
-}
-
 /** Printed size (W × D × H, mm) of everything imported. Slicer space is Z-up. */
 export function measure(groups: ImportGroup[]): [number, number, number] {
   const min = [Infinity, Infinity, Infinity];

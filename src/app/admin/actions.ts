@@ -302,7 +302,8 @@ export async function deleteProduct(id: string): Promise<ActionResult> {
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 const uploadKinds = {
-  model: { exts: ["stl"], folder: "models" },
+  // Models are uploaded as gzipped STLs (see meshprep.ts); plain STL still accepted.
+  model: { exts: ["stl", "stl.gz"], folder: "models" },
   photo: { exts: ["jpg", "jpeg", "png", "webp"], folder: "photos" },
 } as const;
 
@@ -325,10 +326,11 @@ export async function createUploadUrl(input: {
         size: z.number().int().positive(),
       })
       .parse(input);
-    const ext = filename.split(".").pop()?.toLowerCase() ?? "";
+    const lower = filename.toLowerCase();
+    const ext = lower.endsWith(".stl.gz") ? "stl.gz" : (lower.split(".").pop() ?? "");
     const rules = uploadKinds[kind];
     if (!(rules.exts as readonly string[]).includes(ext)) return fail(`Only ${rules.exts.join(", ")} files are allowed here.`);
-    if (size > MAX_UPLOAD_BYTES) return fail("That file is over 50 MB. Try simplifying the mesh in Bambu Studio first.");
+    if (size > MAX_UPLOAD_BYTES) return fail("This part is still over 50 MB after optimizing. Try simplifying the model in Bambu Studio.");
 
     const path = `products/${productId}/${rules.folder}/${randomUUID()}.${ext}`;
     const { data, error } = await supabaseAdmin().storage.from(STORAGE_BUCKET).createSignedUploadUrl(path);
