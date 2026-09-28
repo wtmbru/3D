@@ -1,26 +1,146 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+/* ── Design tokens ───────────────────────────────────────────────────────────
+   Swap these to rebrand. Everything else references them. */
+@theme {
+  --color-cream: #fff6ea;
+  --color-cream-deep: #ffecd4;
+  --color-paper: #ffffff;
+  --color-ink: #1f1640;
+  --color-ink-soft: #5b527a;
+  --color-ink-faint: #9a93b3;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-tomato: #ff5e3a;
+  --color-sun: #ffc53d;
+  --color-mint: #2ed3a0;
+  --color-sky: #4f8bff;
+  --color-grape: #9a6bff;
+  --color-bubble: #ff7ec0;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  --color-tomato-soft: #ffd9cf;
+  --color-sun-soft: #fff0c2;
+  --color-mint-soft: #c9f5e6;
+  --color-sky-soft: #d6e4ff;
+  --color-grape-soft: #e7dcff;
+  --color-bubble-soft: #ffdcee;
+
+  --font-display: var(--font-bricolage), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-dm-sans), ui-sans-serif, system-ui, sans-serif;
+
+  --radius-blob: 28px;
+
+  --shadow-pop: 4px 4px 0 0 var(--color-ink);
+  --shadow-pop-sm: 2px 2px 0 0 var(--color-ink);
+  --shadow-pop-lg: 6px 6px 0 0 var(--color-ink);
+
+  --animate-marquee: marquee 40s linear infinite;
+  --animate-wiggle: wiggle 2.4s ease-in-out infinite;
+  --animate-float: float 5s ease-in-out infinite;
+
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(-4deg); }
+    50% { transform: rotate(4deg); }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-8px); }
   }
 }
 
+html {
+  background: var(--color-cream);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
+}
+
+::selection {
+  background: var(--color-sun);
+  color: var(--color-ink);
+}
+
+/* Faint horizontal "layer lines", like the surface of a 3D print. */
+@utility layer-lines {
+  background-image: repeating-linear-gradient(
+    0deg,
+    transparent 0 9px,
+    color-mix(in srgb, var(--color-ink) 5%, transparent) 9px 10px
+  );
+}
+
+/* Chunky outlined surface with a hard offset shadow. */
+@utility chunky {
+  border: 2px solid var(--color-ink);
+  box-shadow: var(--shadow-pop);
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-full border-2 border-ink px-6 py-3 font-display text-base font-bold tracking-tight transition-[transform,box-shadow,background-color] duration-150 select-none;
+    box-shadow: var(--shadow-pop);
+  }
+  .btn:hover:not(:disabled) {
+    transform: translate(-1px, -1px);
+    box-shadow: var(--shadow-pop-lg);
+  }
+  .btn:active:not(:disabled) {
+    transform: translate(3px, 3px);
+    box-shadow: 1px 1px 0 0 var(--color-ink);
+  }
+  .btn:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+  .btn:focus-visible,
+  .focus-ring:focus-visible {
+    outline: 3px solid var(--color-sky);
+    outline-offset: 3px;
+  }
+  .btn-primary {
+    @apply bg-tomato text-paper;
+  }
+  .btn-secondary {
+    @apply bg-paper text-ink;
+  }
+  .btn-sun {
+    @apply bg-sun text-ink;
+  }
+  .btn-sm {
+    @apply px-4 py-2 text-sm;
+    box-shadow: var(--shadow-pop-sm);
+  }
+
+  .chip {
+    @apply inline-flex items-center gap-1.5 rounded-full border-2 border-ink bg-paper px-3 py-1 text-sm font-semibold;
+  }
+
+  .eyebrow {
+    @apply font-display text-sm font-bold tracking-wide text-ink-soft uppercase;
+  }
+
+  /* ── Admin ── */
+  .admin-input {
+    @apply block w-full rounded-xl border-2 border-ink/20 bg-paper px-3 py-2 text-[15px] transition-colors outline-none placeholder:text-ink-faint focus:border-ink;
+  }
+  .admin-input:disabled {
+    @apply bg-cream text-ink-soft;
+  }
+  .admin-label {
+    @apply mb-1 block text-sm font-semibold;
+  }
+  .admin-hint {
+    @apply mt-1 block text-xs text-ink-soft;
+  }
+  .admin-card {
+    @apply rounded-3xl border-2 border-ink bg-paper p-5 sm:p-6;
+  }
+  .admin-h2 {
+    @apply font-display text-xl font-extrabold;
+  }
 }
