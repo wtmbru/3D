@@ -9,6 +9,7 @@ import { categories, FAMILIES, FINISHES, MAX_PHOTOS } from "@/data/constants";
 import { MAX_COLORS, platesOverLimit } from "@/lib/pricing";
 import { clientIp, isThrottled, recordAttempt, requireAdmin } from "@/lib/server/auth";
 import { getCatalog, getProducts, toFilamentRow, toProductRow } from "@/lib/server/catalog";
+import { saveSetting } from "@/lib/server/settings";
 import {
   createSessionToken,
   isAdminConfigured,
@@ -327,6 +328,11 @@ export async function saveProduct(input: ProductInput): Promise<ActionResult<{ i
 
     const { data: before } = await db.from("products").select("*").eq("id", p.id).maybeSingle();
     const row: Record<string, unknown> = toProductRow(p);
+    if (!before) {
+      // A new product goes to the end of the shop, after any manual ordering.
+      const { data: last } = await db.from("products").select("sort").order("sort", { ascending: false }).limit(1);
+      row.sort = (last?.[0]?.sort ?? -1) + 1;
+    }
     // Plain products don't need the options columns, so they keep saving even if
     // the 0002 database update hasn't been run yet (new rows can't tell; omit).
     const usesOptions = (p.variants?.length ?? 0) > 0 || (p.addons?.length ?? 0) > 0 || !!p.variantLabel;
@@ -368,6 +374,33 @@ const variantModel = (v: VariantFields): VariantFields => ({
   dimensions: v.dimensions,
   layout: v.layout,
 });
+
+/** Save the shop order: the list of product ids, first to last. */
+export async function reorderProducts(ids: string[]): Promise<ActionResult> {
+  return adminAction(async () => {
+    const list = z.array(z.string().uuid()).min(1).max(500).parse(ids);
+    const db = supabaseAdmin();
+    const results = await Promise.all(list.map((id, sort) => db.from("products").update({ sort }).eq("id", id)));
+    const failed = results.find((r) => r.error);
+    if (failed?.error) throw failed.error;
+    refreshStore();
+    return { ok: true };
+  });
+}
+
+/** Pick the product shown big at the top of the homepage (null = automatic). */
+export async function setHeroProduct(id: string | null): Promise<ActionResult> {
+  return adminAction(async () => {
+    if (id !== null) {
+      const product = (await getProducts(true)).find((p) => p.id === z.string().uuid().parse(id));
+      if (!product) return fail("That product no longer exists.");
+      if (!product.published) return fail("Publish this product first. Drafts can't be shown on the homepage.");
+    }
+    await saveSetting("home", { heroProductId: id });
+    refreshStore();
+    return { ok: true };
+  });
+}
 
 export async function deleteProduct(id: string): Promise<ActionResult> {
   return adminAction(async () => {

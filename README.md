@@ -119,6 +119,12 @@ Each turns on when its settings exist, and a failure never affects the order (it
 
 Admin → **Settings** shows what's switched on and has a **Send a test** button. Customer confirmation emails aren't sent (they need a domain of your own); the confirmation page and tracking link cover that for now. The code is in `src/lib/server/notify.ts`.
 
+## Order of products and the homepage spotlight
+
+In **Admin → Products**, drag a row (or use the ▲ ▼ arrows, which also work on phones) to change the order. It saves as you go and is the order customers see in the shop and in "Customer favorites" on the homepage. New products are added at the end.
+
+The **star** picks which print is shown big at the top of the homepage. With no star chosen, the homepage picks one automatically (the first featured product with color palettes, in shop order), and the banner at the top of the list says which. Only live products can be starred. The pick is stored in the `settings` table (`home`), so it needs the orders migration, `0003_orders.sql`.
+
 ## Options and add-ons
 
 - **Options** (sizes, shapes, versions): each option has its own model, price, palettes and size. Customers pick one on the product page, colors carry over between options when part names match, and product cards show a badge like "4 sizes". Manage them in the product editor's **Options** card. The purple strip at the top shows which option you're editing.

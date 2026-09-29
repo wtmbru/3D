@@ -3,7 +3,9 @@ import { HeroViewer } from "@/components/home/HeroViewer";
 import { ProductCard } from "@/components/ProductCard";
 import { SwatchDot } from "@/components/Swatch";
 import { categories } from "@/data/constants";
+import { pickHero } from "@/lib/hero";
 import { getCatalog, getProducts } from "@/lib/server/catalog";
+import { getHomeSettings } from "@/lib/server/settings";
 
 const steps = [
   {
@@ -29,8 +31,8 @@ const steps = [
 export default async function Home() {
   const [{ filaments }, products] = await Promise.all([getCatalog(), getProducts()]);
   const featured = products.filter((p) => p.featured);
-  // Hero: the first featured product with color presets to cycle through.
-  const hero = featured.find((p) => p.presets.length > 1) ?? featured[0] ?? products[0];
+  // The big model at the top: the one picked in Admin → Products (the star), else automatic.
+  const hero = pickHero(products, (await getHomeSettings()).heroProductId);
   const inStock = filaments.filter((f) => f.inStock);
 
   return (
