@@ -1,4 +1,4 @@
-# Layer Cake — 3D print storefront
+# Filamint — 3D print storefront
 
 A storefront where customers pick a 3D-printed design, recolor each part in a live 3D preview using real filament colors, and add it to the cart. The owner manages products, filaments and prices in a password-protected admin panel at `/admin`.
 
@@ -31,6 +31,17 @@ Without Supabase configured, the store runs **read-only on the sample catalog** 
 6. Restart `npm run dev`.
 
 When deploying to Vercel, add the same four variables under **Settings → Environment Variables**.
+
+## Branding
+
+The shop name is in `src/config/site.ts` and flows into the header, footer, page titles, link previews and notification emails. The logo starts from one image, `brand/filamint-logo-original.jpg`. To change it, replace that file and run:
+
+```bash
+pip install pillow numpy scipy
+python3 scripts/brand-assets.py brand/filamint-logo-original.jpg
+```
+
+That cuts out the background and regenerates the header icon, the browser tab and home-screen icons, and the link-preview image (`src/assets/brand`, `src/app/icon.png`, `apple-icon.png`, `favicon.ico`, `opengraph-image.png`). The name next to the icon is live text in the site font, so it stays sharp on light and dark backgrounds.
 
 ## Where things live
 

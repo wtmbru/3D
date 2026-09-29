@@ -1,4 +1,4 @@
--- Layer Cake store schema.
+-- Filamint store schema.
 -- Run once in the Supabase dashboard (SQL Editor → paste → Run),
 -- or with the CLI: supabase db push
 

@@ -67,7 +67,7 @@ export const useCart = create<CartState>()(
       clear: () => set({ items: [] }),
     }),
     {
-      name: "layercake-cart",
+      name: "filamint-cart",
       version: 1,
       storage: createJSONStorage(() => localStorage),
       // Rehydrated in <CartHydrator /> after mount to avoid SSR mismatches.
