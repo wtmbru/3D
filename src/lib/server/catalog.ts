@@ -142,11 +142,11 @@ async function read<T>(
   query: () => PromiseLike<{ data: T | null; error: { message: string } | null }>,
 ): Promise<T> {
   let last = "";
-  for (let attempt = 0; attempt < 3; attempt++) {
+  for (let attempt = 0; attempt < 4; attempt++) {
     const res = await query();
     if (!res.error) return res.data as T;
     last = res.error.message;
-    await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+    if (attempt < 3) await new Promise((r) => setTimeout(r, 500 * 2 ** attempt)); // waits 0.5s, 1s, 2s
   }
   throw new Error(`Loading ${what} failed: ${last}`);
 }
