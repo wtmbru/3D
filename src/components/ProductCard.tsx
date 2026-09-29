@@ -2,6 +2,7 @@ import Link from "next/link";
 import { formatPrice, getFilament, startingPrice } from "@/lib/pricing";
 import { getCatalog } from "@/lib/server/catalog";
 import type { Product } from "@/lib/types";
+import { optionsBadge } from "@/lib/variants";
 import { ProductThumb } from "./ProductThumb";
 import { SwatchDot } from "./Swatch";
 
@@ -9,6 +10,7 @@ const tileColors = ["bg-sky-soft", "bg-sun-soft", "bg-mint-soft", "bg-bubble-sof
 
 export async function ProductCard({ product, index = 0 }: { product: Product; index?: number }) {
   const catalog = await getCatalog();
+  const options = optionsBadge(product);
   const defaults = product.parts
     .map((p) => getFilament(catalog, p.defaultFilament))
     .filter((f, i, all) => f && all.findIndex((g) => g?.id === f.id) === i);
@@ -45,6 +47,7 @@ export async function ProductCard({ product, index = 0 }: { product: Product; in
           <span className="text-xs font-semibold text-ink-soft">
             {product.parts.length} customizable {product.parts.length === 1 ? "part" : "parts"}
           </span>
+          {options && <span className="chip ml-auto bg-grape-soft px-2 py-0.5 text-xs">{options}</span>}
         </div>
       </div>
     </Link>

@@ -6,6 +6,7 @@
  * (by slug) are skipped so edits made in the admin panel aren't overwritten.
  *
  * Run: npm run seed
+ * Only some products: npm run seed -- stud-brick-charm bloop-robot
  */
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -67,26 +68,38 @@ async function main() {
 
   const existing = new Set((check(await db.from("products").select("slug"), "products") ?? []).map((r) => r.slug));
 
+  const only = process.argv.slice(2);
   for (const [sort, p] of seedProducts.entries()) {
+    if (only.length && !only.includes(p.slug)) continue;
     if (existing.has(p.slug)) {
       console.log(`· ${p.name} already exists, skipping`);
       continue;
     }
     const id = randomUUID();
-    const parts = [];
-    for (const part of p.parts) {
-      const local = path.join(process.cwd(), "public", part.file);
-      const storagePath = `products/${id}/models/${randomUUID()}.stl`;
-      check(
-        await db.storage.from(BUCKET).upload(storagePath, fs.readFileSync(local), {
-          contentType: "model/stl",
-          cacheControl: "31536000",
-        }),
-        `upload ${part.file}`,
-      );
-      const publicUrl = db.storage.from(BUCKET).getPublicUrl(storagePath).data.publicUrl;
-      parts.push({ ...part, file: publicUrl });
-    }
+    // Upload each local model once, even when several options share it.
+    const uploaded = new Map<string, string>();
+    const uploadParts = async (list: typeof p.parts) => {
+      const out = [];
+      for (const part of list) {
+        if (!uploaded.has(part.file)) {
+          const local = path.join(process.cwd(), "public", part.file);
+          const storagePath = `products/${id}/models/${randomUUID()}.stl`;
+          check(
+            await db.storage.from(BUCKET).upload(storagePath, fs.readFileSync(local), {
+              contentType: "model/stl",
+              cacheControl: "31536000",
+            }),
+            `upload ${part.file}`,
+          );
+          uploaded.set(part.file, db.storage.from(BUCKET).getPublicUrl(storagePath).data.publicUrl);
+        }
+        out.push({ ...part, file: uploaded.get(part.file)! });
+      }
+      return out;
+    };
+    const parts = await uploadParts(p.parts);
+    const variants = [];
+    for (const v of p.variants ?? []) variants.push({ ...v, parts: await uploadParts(v.parts) });
     check(
       await db.from("products").insert({
         id,
@@ -108,10 +121,13 @@ async function main() {
         badge: p.badge ?? null,
         published: p.published,
         sort,
+        // Options columns need migration 0002; only send them when used.
+        ...(variants.length ? { variants, variant_label: p.variantLabel ?? null } : {}),
+        ...(p.addons?.length ? { addons: p.addons } : {}),
       }),
       `product ${p.name}`,
     );
-    console.log(`✓ ${p.name} (${parts.length} parts uploaded)`);
+    console.log(`✓ ${p.name} (${uploaded.size} models uploaded${variants.length ? `, ${variants.length} options` : ""})`);
   }
   console.log("\nDone! Open /admin to see everything.");
 }

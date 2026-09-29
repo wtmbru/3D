@@ -7,23 +7,39 @@ import { SwatchDot } from "@/components/Swatch";
 import { ModelViewer } from "@/components/viewer/ModelViewer";
 import { finishLabels } from "@/data/constants";
 import { MAX_QTY, useCart } from "@/lib/cart";
-import { designSearch, remapToFamily } from "@/lib/config";
-import { colorsByPlate, formatPrice, getFilament, MAX_COLORS, plateOf, quote } from "@/lib/pricing";
-import type { ColorConfig, MaterialFamily, Product } from "@/lib/types";
+import { defaultsFor, designSearch, remapToFamily, type Design } from "@/lib/config";
+import {
+  colorsByPlate,
+  defaultConfig,
+  formatPrice,
+  getFilament,
+  MAX_COLORS,
+  plateOf,
+  platesOverLimit,
+  quote,
+} from "@/lib/pricing";
+import type { AddonSelection, ColorConfig, MaterialFamily, Product } from "@/lib/types";
+import { carryColors, hasOptions, resolveVariant } from "@/lib/variants";
+import { AddonPicker } from "./AddonPicker";
 import { AmsMeter } from "./AmsMeter";
+import { OptionPicker } from "./OptionPicker";
 import { Palette } from "./Palette";
 
 interface Props {
+  /** The full product, including all its options. */
   product: Product;
-  initialFamily: MaterialFamily;
-  initialConfig: ColorConfig;
+  initial: Design;
 }
 
-export function Configurator({ product, initialFamily, initialConfig }: Props) {
+export function Configurator({ product: full, initial }: Props) {
   const catalog = useCatalog();
   const { materials } = catalog;
-  const [family, setFamily] = useState(initialFamily);
-  const [config, setConfig] = useState(initialConfig);
+  const [variantId, setVariantId] = useState(initial.variantId);
+  const [addons, setAddons] = useState<AddonSelection>(initial.addons);
+  // Everything below works on the selected option as if it were a plain product.
+  const product = useMemo(() => resolveVariant(full, variantId), [full, variantId]);
+  const [family, setFamily] = useState(initial.family);
+  const [config, setConfig] = useState(initial.config);
   const [activePart, setActivePart] = useState<string | null>(product.parts.find((p) => !p.locked)?.id ?? null);
   const [preview, setPreview] = useState<string | null>(null);
   const [qty, setQty] = useState(1);
@@ -32,7 +48,10 @@ export function Configurator({ product, initialFamily, initialConfig }: Props) {
   const addToCart = useCart((s) => s.add);
   const partsRef = useRef<HTMLDivElement>(null);
 
-  const price = useMemo(() => quote(catalog, product, family, config), [catalog, product, family, config]);
+  const price = useMemo(
+    () => quote(catalog, product, family, config, addons),
+    [catalog, product, family, config, addons],
+  );
   const plateColors = colorsByPlate(product, config);
   const plates = [...new Set(product.parts.map(plateOf))].sort((a, b) => a - b);
   const familyInfo = materials.find((m) => m.family === family)!;
@@ -45,15 +64,29 @@ export function Configurator({ product, initialFamily, initialConfig }: Props) {
 
   // Keep the URL in sync so any design can be shared or bookmarked.
   useEffect(() => {
-    const search = designSearch(product, family, config);
+    const search = designSearch(full, { variantId, family, config, addons });
     window.history.replaceState(null, "", `${window.location.pathname}?${search}`);
-  }, [product, family, config]);
+  }, [full, variantId, family, config, addons]);
 
   useEffect(() => {
     if (!added) return;
     const t = setTimeout(() => setAdded(false), 3500);
     return () => clearTimeout(t);
   }, [added]);
+
+  /** Switch option (size, shape…), keeping the customer's colors where parts match. */
+  function selectVariant(id: string) {
+    const next = resolveVariant(full, id);
+    const nextFamily = next.materials.includes(family) ? family : next.materials[0];
+    const carried = { ...defaultConfig(next), ...carryColors(product, config, next) };
+    let nextConfig = remapToFamily(catalog, next, carried, nextFamily);
+    if (platesOverLimit(next, nextConfig).length) nextConfig = defaultsFor(catalog, next, nextFamily);
+    setVariantId(id);
+    setFamily(nextFamily);
+    setConfig(nextConfig);
+    setPreview(null);
+    setActivePart(next.parts.find((p) => !p.locked)?.id ?? null);
+  }
 
   function pick(partId: string, filamentId: string) {
     setConfig((c) => ({ ...c, [partId]: filamentId }));
@@ -115,6 +148,7 @@ export function Configurator({ product, initialFamily, initialConfig }: Props) {
       <div className="max-md:contents md:sticky md:top-24 md:self-start">
         <div className="chunky layer-lines relative overflow-hidden rounded-[36px] bg-sky-soft shadow-[var(--shadow-pop-lg)] max-md:sticky max-md:top-[76px] max-md:z-20 max-md:h-[42svh] md:aspect-square">
           <ModelViewer
+            key={variantId}
             product={product}
             config={shown}
             activePart={activePart}
@@ -169,6 +203,10 @@ export function Configurator({ product, initialFamily, initialConfig }: Props) {
           <span className="font-display text-4xl font-extrabold tabular-nums">{formatPrice(price.unit)}</span>
           <span className="text-ink-soft">each</span>
         </div>
+
+        {hasOptions(full) && (
+          <OptionPicker product={full} selected={variantId} onSelect={selectVariant} />
+        )}
 
         {/* Material */}
         {product.materials.length > 1 && (
@@ -319,6 +357,10 @@ export function Configurator({ product, initialFamily, initialConfig }: Props) {
           ))}
         </div>
 
+        {(full.addons?.length ?? 0) > 0 && (
+          <AddonPicker product={full} selected={addons} onChange={setAddons} />
+        )}
+
         {/* Buy */}
         <div className="mt-8 flex flex-wrap items-stretch gap-3">
           <div className="chunky flex items-center rounded-full bg-paper">
@@ -348,7 +390,14 @@ export function Configurator({ product, initialFamily, initialConfig }: Props) {
             type="button"
             className="btn btn-primary flex-1 text-lg"
             onClick={() => {
-              addToCart({ slug: product.slug, family, config, qty });
+              addToCart({
+                slug: full.slug,
+                ...(hasOptions(full) ? { variant: variantId } : {}),
+                family,
+                config,
+                ...(full.addons?.length ? { addons } : {}),
+                qty,
+              });
               setAdded(true);
             }}
           >

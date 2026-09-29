@@ -208,6 +208,22 @@ function duck() {
   writeModel("dapper-duck", { body, beak, eyes, hat });
 }
 
+// ── Stud Brick Charm (one model per size option) ────────────────────────────
+function bricks() {
+  const unit = 16; // stud pitch, mm
+  for (const [nx, ny] of [[1, 1], [1, 2], [2, 2], [2, 3]]) {
+    const w = nx * unit;
+    const d = ny * unit;
+    const brick = group(mesh(new RoundedBoxGeometry(w, 12, d, 4, 1.5), [0, 6, 0]));
+    for (let i = 0; i < nx; i++) {
+      for (let j = 0; j < ny; j++) {
+        brick.add(mesh(cyl(4.8, 4.8, 3, 40), [(i + 0.5) * unit - w / 2, 13.5, (j + 0.5) * unit - d / 2]));
+      }
+    }
+    writeModel(`stud-brick-${nx}x${ny}`, { brick });
+  }
+}
+
 console.log("Generating sample models →", OUT_DIR);
 robot();
 toadstool();
@@ -215,3 +231,4 @@ planter();
 rocket();
 starCharm();
 duck();
+bricks();

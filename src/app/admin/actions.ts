@@ -23,7 +23,7 @@ import {
   storagePathFromUrl,
   supabaseAdmin,
 } from "@/lib/server/supabase";
-import type { Filament, Product } from "@/lib/types";
+import type { Filament, Product, VariantFields } from "@/lib/types";
 
 export type ActionResult<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -205,6 +205,35 @@ const partSchema = z.object({
   transform: z.object({ position: vec3, rotation: vec3 }).optional(),
 });
 
+const idSlug = z.string().regex(/^[a-z0-9]+(-[a-z0-9]+)*$/, "Option ids can only use a-z, 0-9 and dashes").max(40);
+const presetsSchema = z
+  .array(z.object({ name: z.string().trim().min(1).max(40), colors: z.record(z.string(), z.string()) }))
+  .max(12);
+const dimensionsSchema = z.tuple([
+  z.coerce.number().int().min(0),
+  z.coerce.number().int().min(0),
+  z.coerce.number().int().min(0),
+]);
+
+const variantSchema = z.object({
+  id: idSlug,
+  name: z.string().trim().min(1, "Every option needs a name").max(40),
+  basePrice: money,
+  parts: z.array(partSchema).min(1, "Every option needs at least one model"),
+  presets: presetsSchema,
+  dimensions: dimensionsSchema,
+  layout: z.enum(["assembled", "spread"]).default("assembled"),
+});
+
+const addonSchema = z.object({
+  id: idSlug,
+  name: z.string().trim().min(1, "Every add-on needs a name").max(40),
+  choices: z
+    .array(z.object({ id: idSlug, name: z.string().trim().min(1, "Every choice needs a name").max(40), price: money }))
+    .min(2, "An add-on needs at least two choices (e.g. None and Keyring)")
+    .max(10),
+});
+
 const productSchema = z.object({
   id: z.string().uuid(),
   slug: z
@@ -218,15 +247,18 @@ const productSchema = z.object({
   basePrice: money,
   materials: z.array(z.enum(FAMILIES)).min(1, "Pick at least one material"),
   parts: z.array(partSchema).min(1, "Upload at least one STL"),
-  presets: z.array(z.object({ name: z.string().trim().min(1).max(40), colors: z.record(z.string(), z.string()) })).max(12),
+  presets: presetsSchema,
   photos: z.array(z.string().url()).max(12).default([]),
-  dimensions: z.tuple([z.coerce.number().int().min(0), z.coerce.number().int().min(0), z.coerce.number().int().min(0)]),
+  dimensions: dimensionsSchema,
   leadTimeDays: z.coerce.number().int().min(0).max(90),
   upAxis: z.enum(["z", "y"]).default("z"),
   layout: z.enum(["assembled", "spread"]).default("assembled"),
   featured: z.boolean().default(false),
   badge: z.string().trim().max(24).optional(),
   published: z.boolean(),
+  variants: z.array(variantSchema).max(24).default([]),
+  variantLabel: z.string().trim().max(24).optional(),
+  addons: z.array(addonSchema).max(6).default([]),
 });
 
 export type ProductInput = z.input<typeof productSchema>;
@@ -235,44 +267,71 @@ export async function saveProduct(input: ProductInput): Promise<ActionResult<{ i
   return adminAction(async () => {
     const parsed = productSchema.safeParse(input);
     if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Some fields aren't valid.");
-    const p = parsed.data as Product;
+    let p = parsed.data as Product;
 
-    // Cross-field checks the schema can't express.
-    if (new Set(p.parts.map((x) => x.id)).size !== p.parts.length) return fail("Two parts have the same id.");
+    // One option is just a plain product; with several, the top-level model
+    // fields always mirror the first option.
+    if ((p.variants?.length ?? 0) === 1) p = { ...p, ...variantModel(p.variants![0]), variants: [] };
+    else if (p.variants?.length) p = { ...p, ...variantModel(p.variants[0]) };
+    if (p.variants?.length && new Set(p.variants.map((v) => v.id)).size !== p.variants.length) {
+      return fail("Two options have the same id.");
+    }
+    if (p.addons?.some((g) => new Set(g.choices.map((c) => c.id)).size !== g.choices.length)) {
+      return fail("Two add-on choices have the same name.");
+    }
+
     // Only files uploaded to our own storage (no local blob: URLs or outside links).
     const ours = (url: string) => url.startsWith(process.env.SUPABASE_URL!) && !!storagePathFromUrl(url);
-    if (p.parts.some((x) => !ours(x.file))) return fail("Some models haven't finished uploading yet.");
     if ((p.photos ?? []).some((u) => !ours(u))) return fail("Some photos haven't finished uploading yet.");
     const { filaments } = await getCatalog();
     const byId = new Map(filaments.map((f) => [f.id, f]));
     const defaultFamily = p.materials[0];
-    for (const part of p.parts) {
-      const f = byId.get(part.defaultFilament);
-      if (!f) return fail(`Pick a default color for "${part.name}".`);
-      if (f.family !== defaultFamily) return fail(`"${part.name}" defaults to a ${f.family} color, but the first material is ${defaultFamily}.`);
-    }
-    const over = platesOverLimit(p, Object.fromEntries(p.parts.map((x) => [x.id, x.defaultFilament])));
-    if (over.length) {
-      return fail(`The default colors for print ${over.join(", ")} use more than ${MAX_COLORS} filaments. One print can only use ${MAX_COLORS}.`);
-    }
-    for (const preset of p.presets) {
-      const colors = Object.fromEntries(p.parts.map((x) => [x.id, preset.colors[x.id] ?? x.defaultFilament]));
-      if (Object.values(colors).some((id) => !byId.has(id))) return fail(`Palette "${preset.name}" uses a color that no longer exists.`);
-      if (platesOverLimit(p, colors).length) return fail(`Palette "${preset.name}" uses more than ${MAX_COLORS} colors in one print.`);
+
+    // Cross-field checks the schema can't express, for every option.
+    const models = p.variants?.length ? p.variants.map((v) => ({ ...v, label: ` (${v.name})` })) : [{ ...p, label: "" }];
+    for (const m of models) {
+      if (new Set(m.parts.map((x) => x.id)).size !== m.parts.length) return fail(`Two parts have the same id${m.label}.`);
+      if (m.parts.some((x) => !ours(x.file))) return fail(`Some models haven't finished uploading yet${m.label}.`);
+      for (const part of m.parts) {
+        const f = byId.get(part.defaultFilament);
+        if (!f) return fail(`Pick a default color for "${part.name}"${m.label}.`);
+        if (f.family !== defaultFamily) {
+          return fail(`"${part.name}"${m.label} defaults to a ${f.family} color, but the first material is ${defaultFamily}.`);
+        }
+      }
+      const over = platesOverLimit(m, Object.fromEntries(m.parts.map((x) => [x.id, x.defaultFilament])));
+      if (over.length) {
+        return fail(`The default colors for print ${over.join(", ")}${m.label} use more than ${MAX_COLORS} filaments. One print can only use ${MAX_COLORS}.`);
+      }
+      for (const preset of m.presets) {
+        const colors = Object.fromEntries(m.parts.map((x) => [x.id, preset.colors[x.id] ?? x.defaultFilament]));
+        if (Object.values(colors).some((id) => !byId.has(id))) return fail(`Palette "${preset.name}"${m.label} uses a color that no longer exists.`);
+        if (platesOverLimit(m, colors).length) return fail(`Palette "${preset.name}"${m.label} uses more than ${MAX_COLORS} colors in one print.`);
+      }
     }
 
     const db = supabaseAdmin();
     const { data: clash } = await db.from("products").select("id").eq("slug", p.slug).neq("id", p.id).maybeSingle();
     if (clash) return fail(`Another product already uses the URL name "${p.slug}".`);
 
-    const { data: before } = await db.from("products").select("parts, photos").eq("id", p.id).maybeSingle();
+    const { data: before } = await db.from("products").select("*").eq("id", p.id).maybeSingle();
     const { error } = await db.from("products").upsert(toProductRow(p));
-    if (error) throw error;
+    if (error) {
+      if (/variant|addons/.test(error.message)) {
+        throw new Error("The database needs an update: run supabase/migrations/0002_product_options.sql in Supabase's SQL Editor.");
+      }
+      throw error;
+    }
 
-    // Delete files that were replaced or removed.
+    // Delete files that were replaced or removed (from any option).
     if (before) {
-      const keep = new Set([...p.parts.map((x) => x.file), ...(p.photos ?? [])]);
-      const old: string[] = [...(before.parts as Product["parts"]).map((x) => x.file), ...(before.photos as string[])];
+      const files = (x: Pick<Product, "parts" | "photos" | "variants">) => [
+        ...x.parts.map((part) => part.file),
+        ...(x.variants ?? []).flatMap((v) => v.parts.map((part) => part.file)),
+        ...(x.photos ?? []),
+      ];
+      const keep = new Set(files(p));
+      const old = files({ parts: before.parts ?? [], photos: before.photos ?? [], variants: before.variants ?? [] });
       const orphans = old.filter((u) => !keep.has(u)).map(storagePathFromUrl).filter((x): x is string => !!x);
       if (orphans.length) await db.storage.from(STORAGE_BUCKET).remove(orphans);
     }
@@ -281,6 +340,14 @@ export async function saveProduct(input: ProductInput): Promise<ActionResult<{ i
     return { ok: true, id: p.id, slug: p.slug };
   });
 }
+
+const variantModel = (v: VariantFields): VariantFields => ({
+  basePrice: v.basePrice,
+  parts: v.parts,
+  presets: v.presets,
+  dimensions: v.dimensions,
+  layout: v.layout,
+});
 
 export async function deleteProduct(id: string): Promise<ActionResult> {
   return adminAction(async () => {

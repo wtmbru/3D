@@ -15,7 +15,7 @@ Without Supabase configured, the store runs **read-only on the sample catalog** 
 ## Connect Supabase (one-time)
 
 1. Create a free project at [supabase.com](https://supabase.com).
-2. **SQL Editor** → paste all of `supabase/migrations/0001_init.sql` → **Run**. This creates the tables, locks them down with row-level security, and creates the `products` storage bucket.
+2. **SQL Editor** → paste all of `supabase/migrations/0001_init.sql` → **Run**, then do the same with `0002_product_options.sql`. This creates the tables, locks them down with row-level security, and creates the `products` storage bucket.
 3. **Project Settings → API Keys**: copy the project URL and the **secret** key into `.env.local`:
    ```
    SUPABASE_URL=https://xxxx.supabase.co
@@ -70,6 +70,13 @@ Choose whether customers recolor **each filament color** (best for painted model
 
 The importer lives in `src/lib/three/threemf.ts`. The paint decoding follows BambuStudio's `TriangleSelector`.
 
+## Options and add-ons
+
+- **Options** (sizes, shapes, versions): each option has its own model, price, palettes and size. Customers pick one on the product page, colors carry over between options when part names match, and product cards show a badge like "4 sizes". Manage them in the product editor's **Options** card. The purple strip at the top shows which option you're editing.
+- **From one .3mf:** drop in a file with several objects (like a MakerWorld download with every size on one plate). The import looks at how the objects are laid out and named, and suggests **One model**, **Options to choose from**, or **A set sold together**, with a preview of each object and the reason for its suggestion. It can also add a "Full set" option.
+- **Add-ons** (keyring, magnet, gift box…): price-only extras, managed in the **Add-ons** card. The first choice is the default.
+- Options need the database update in `supabase/migrations/0002_product_options.sql`.
+
 ## Pieces printed separately
 
 - **Prints:** give each part a print number. Parts that print together share one AMS, so the 4-color limit and the extra-color fee apply per print. A glued-on hat can be "Print 2" with its own 4 colors.
@@ -78,11 +85,11 @@ The importer lives in `src/lib/three/threemf.ts`. The paint decoding follows Bam
 
 ## How pricing works
 
-`base price + material surcharge + $1 per extra color + any filament surcharges (matte/silk/etc.)`. It's computed in `quote()` in `src/lib/pricing.ts`, and the product page shows the breakdown. Cart items store only the design (product, material, colors), and the price is recomputed from the catalog. Checkout must recompute it on the server too.
+`option's base price + material surcharge + $1 per extra color (per print) + any filament surcharges (matte/silk/etc.) + add-ons`. It's computed in `quote()` in `src/lib/pricing.ts`, and the product page shows the breakdown. Cart items store only the design (product, option, material, colors, add-ons), and the price is recomputed from the catalog. Checkout must recompute it on the server too.
 
 ## Scripts
 
-- `npm run seed`: load the sample catalog into Supabase
+- `npm run seed`: load the sample catalog into Supabase (`npm run seed -- stud-brick-charm` loads just one product)
 - `npm run models`: regenerate the sample STLs in `public/models`
 - `npm run typecheck` / `npm run lint`
 
@@ -92,4 +99,5 @@ The importer lives in `src/lib/three/threemf.ts`. The paint decoding follows Bam
 - [x] Admin panel: products, filaments, materials, photos
 - [ ] Checkout with Stripe (recompute price server-side), order emails
 - [ ] Orders dashboard showing the exact filament per part
-- [ ] 3MF upload (Bambu Studio multi-part projects) in addition to STL
+- [x] Bambu Studio .3mf import (parts, plates, painting)
+- [x] Product options (sizes, shapes) and add-ons

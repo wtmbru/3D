@@ -23,7 +23,8 @@
 import { strFromU8, unzipSync } from "fflate";
 
 export interface ImportedRegion {
-  /** Source object + part names, for labelling. */
+  /** Source object id (one physical item on the plate) and names, for labelling. */
+  objectKey: string;
   objectName: string;
   partName: string;
   /** Unique id of the source part (object/part), for "each part separately" grouping. */
@@ -483,7 +484,7 @@ export async function import3mf(file: File): Promise<Imported3mf> {
         emitMesh(
           mesh,
           compose(comp.transform, itemMat),
-          { objectName, partName, sourceKey: `${objectId}/${comp.objectId}`, plate },
+          { objectKey: objectId, objectName, partName, sourceKey: `${objectId}/${comp.objectId}`, plate },
           part?.extruder ?? objectSlot,
         );
       }
@@ -496,13 +497,13 @@ export async function import3mf(file: File): Promise<Imported3mf> {
           emitMesh(
             mesh,
             itemMat,
-            { objectName, partName: r.name || objectName, sourceKey: `${objectId}/${i}`, plate },
+            { objectKey: objectId, objectName, partName: r.name || objectName, sourceKey: `${objectId}/${i}`, plate },
             r.extruder ?? objectSlot,
             r.range,
           );
         });
       } else {
-        emitMesh(mesh, itemMat, { objectName, partName: objectName, sourceKey: objectId, plate }, objectSlot);
+        emitMesh(mesh, itemMat, { objectKey: objectId, objectName, partName: objectName, sourceKey: objectId, plate }, objectSlot);
       }
     }
   }

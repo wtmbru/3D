@@ -37,7 +37,7 @@ export default async function ProductPage(props: PageProps<"/product/[slug]">) {
         <span className="text-ink">{product.name}</span>
       </nav>
 
-      <Configurator product={product} initialFamily={initial.family} initialConfig={initial.config} />
+      <Configurator product={product} initial={initial} />
 
       <section className="mt-24">
         <h2 className="font-display text-3xl font-extrabold tracking-tight">You might also like</h2>

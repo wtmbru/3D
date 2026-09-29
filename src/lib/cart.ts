@@ -2,14 +2,17 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import type { ColorConfig, MaterialFamily } from "./types";
+import type { AddonSelection, ColorConfig, MaterialFamily } from "./types";
 
 export interface CartItem {
-  /** Same product + material + colors → same line. */
+  /** Same product + option + material + colors + add-ons → same line. */
   key: string;
   slug: string;
+  /** Selected option id (products with sizes/shapes). */
+  variant?: string;
   family: MaterialFamily;
   config: ColorConfig;
+  addons?: AddonSelection;
   qty: number;
 }
 
@@ -21,12 +24,14 @@ interface CartState {
   clear: () => void;
 }
 
-export function cartKey(slug: string, family: MaterialFamily, config: ColorConfig): string {
-  const colors = Object.keys(config)
+const stable = (r: Record<string, string> = {}) =>
+  Object.keys(r)
     .sort()
-    .map((k) => `${k}=${config[k]}`)
+    .map((k) => `${k}=${r[k]}`)
     .join("&");
-  return `${slug}|${family}|${colors}`;
+
+export function cartKey(item: Omit<CartItem, "key" | "qty">): string {
+  return `${item.slug}|${item.variant ?? ""}|${item.family}|${stable(item.config)}|${stable(item.addons)}`;
 }
 
 export const MAX_QTY = 20;
@@ -39,9 +44,9 @@ export const useCart = create<CartState>()(
   persist(
     (set) => ({
       items: [],
-      add: ({ slug, family, config, qty }) =>
+      add: ({ qty, ...design }) =>
         set((s) => {
-          const key = cartKey(slug, family, config);
+          const key = cartKey(design);
           const existing = s.items.find((i) => i.key === key);
           if (existing) {
             return {
@@ -50,7 +55,7 @@ export const useCart = create<CartState>()(
               ),
             };
           }
-          return { items: [...s.items, { key, slug, family, config, qty }] };
+          return { items: [...s.items, { key, ...design, qty }] };
         }),
       setQty: (key, qty) =>
         set((s) => ({

@@ -2,19 +2,20 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useCatalog } from "@/components/CatalogProvider";
 import { ModelViewer } from "@/components/viewer/ModelViewer";
 import { categories, FAMILIES } from "@/data/constants";
 import { remapToFamily } from "@/lib/config";
 import { colorsByPlate, defaultConfig, distinctFilaments, formatPrice, MAX_COLORS, plateOf, quote } from "@/lib/pricing";
 import { aliasModelFile, layoutProduct, loadProductGeometry } from "@/lib/three/models";
-import type { ColorConfig, MaterialFamily, PartTransform, Product, ProductPart } from "@/lib/types";
+import type { AddonGroup, ColorConfig, MaterialFamily, PartTransform, Product, ProductPart, ProductVariant } from "@/lib/types";
+import { variantFields, variantsOf } from "@/lib/variants";
 import { import3mf, type Imported3mf } from "@/lib/three/threemf";
 import { AssemblyEditor } from "./AssemblyEditor";
 import { allocateBudget, PRODUCT_TRIANGLE_BUDGET, prepareModel } from "@/lib/three/meshprep";
 import { measure as measureGroups, type ImportGroup } from "./from3mf";
-import { Import3mfDialog } from "./Import3mfDialog";
+import { Import3mfDialog, type ImportResult } from "./Import3mfDialog";
 import { deleteProduct, saveProduct } from "../../actions";
 import { Notice, Switch, useNotice } from "../ui";
 import { ColorSelect } from "./ColorSelect";
@@ -31,8 +32,25 @@ interface Upload {
 export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boolean }) {
   const catalog = useCatalog();
   const router = useRouter();
-  const [p, setP] = useState<Product>(initial);
-  const [saved, setSaved] = useState(JSON.stringify(initial));
+  // The full product. In the editor every option lives in `variants` (a plain
+  // product has one); the server flattens single-option products on save.
+  const [prod, setProd] = useState<Product>(() => ({ ...initial, variants: variantsOf(initial) }));
+  const [saved, setSaved] = useState(() => JSON.stringify({ ...initial, variants: variantsOf(initial) }));
+  const [activeVariant, setActiveVariant] = useState(() => variantsOf(initial)[0].id);
+  const activeRef = useRef(activeVariant);
+  useLayoutEffect(() => {
+    activeRef.current = activeVariant;
+  }, [activeVariant]);
+  const variants = prod.variants!;
+  const vIndex = Math.max(0, variants.findIndex((v) => v.id === activeVariant));
+  // `p` is the option being edited, shaped like a plain product, and `setP`
+  // writes model fields back into that option. So everything below (parts,
+  // palettes, arranging, uploads) works per option without knowing about them.
+  const p = useMemo(() => ({ ...prod, ...variantFields(variants[vIndex]) }), [prod, variants, vIndex]);
+  const setP = useCallback(
+    (u: Product | ((view: Product) => Product)) => setProd((prev) => applyView(prev, activeRef.current, u)),
+    [],
+  );
   const [slugTouched, setSlugTouched] = useState(!isNew);
   const [activePart, setActivePart] = useState<string | null>(null);
   const [previewPreset, setPreviewPreset] = useState<number | null>(null);
@@ -48,7 +66,7 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
   const [partUploads, setPartUploads] = useState<Record<string, { progress: number; error?: string }>>({});
   const localFiles = useRef(new Map<string, File>());
 
-  const dirty = JSON.stringify(p) !== saved;
+  const dirty = JSON.stringify(prod) !== saved;
   const family = p.materials[0] ?? "PLA";
   const set = <K extends keyof Product>(k: K, v: Product[K]) => setP((prev) => ({ ...prev, [k]: v }));
 
@@ -86,31 +104,31 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
     return pool[(index * 3) % Math.max(pool.length, 1)]?.id ?? "";
   }
 
-  /** Upload a part's STL in the background; swap in the public URL when done. */
-  async function startPartUpload(partId: string, file: File, localUrl: string) {
-    localFiles.current.set(partId, file);
-    setPartUploads((u) => ({ ...u, [partId]: { progress: 0 } }));
+  /**
+   * Upload a model in the background, then swap its public URL in wherever the
+   * local copy is used (in any option). Tracked by local URL, since part ids
+   * repeat across options.
+   */
+  async function startPartUpload(file: File, localUrl: string) {
+    localFiles.current.set(localUrl, file);
+    setPartUploads((u) => ({ ...u, [localUrl]: { progress: 0 } }));
     try {
-      const url = await uploadFile(p.id, "model", file, (progress) =>
-        setPartUploads((u) => ({ ...u, [partId]: { progress } })),
+      const url = await uploadFile(prod.id, "model", file, (progress) =>
+        setPartUploads((u) => ({ ...u, [localUrl]: { progress } })),
       );
       aliasModelFile(localUrl, url); // reuse the already-parsed model
-      setP((prev) => ({
-        ...prev,
-        parts: prev.parts.map((x) => (x.id === partId && x.file === localUrl ? { ...x, file: url } : x)),
-      }));
-      setPartUploads((u) => omit(u, partId));
-      localFiles.current.delete(partId);
+      setProd((prev) => swapFile(prev, localUrl, url));
+      setPartUploads((u) => omit(u, localUrl));
+      localFiles.current.delete(localUrl);
     } catch (e) {
       const error = e instanceof Error ? e.message : "Upload failed";
-      setPartUploads((u) => ({ ...u, [partId]: { progress: 0, error } }));
+      setPartUploads((u) => ({ ...u, [localUrl]: { progress: 0, error } }));
     }
   }
 
-  function retryUpload(partId: string) {
-    const file = localFiles.current.get(partId);
-    const part = p.parts.find((x) => x.id === partId);
-    if (file && part) startPartUpload(partId, file, part.file);
+  function retryUpload(localUrl: string) {
+    const file = localFiles.current.get(localUrl);
+    if (file) startPartUpload(file, localUrl);
   }
 
   async function addModelFiles(files: File[]) {
@@ -154,56 +172,95 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
         defaultFilament: suggestColor(index++),
       };
       setP((prev) => ({ ...prev, parts: [...prev.parts, part] }));
-      startPartUpload(part.id, prepared.file, localUrl);
+      startPartUpload(prepared.file, localUrl);
     }
     setOptimizing(false);
     if (problems.length) setNotice({ kind: "error", text: problems.join(" ") });
   }
 
-  /** Replace all parts with the groups from a .3mf, then upload them in the background. */
-  async function apply3mf(groups: ImportGroup[], title?: string) {
+  /**
+   * Apply a .3mf import: "single"/"set" replace the parts of the option being
+   * edited; "options" replaces every option with one per object. Models are
+   * optimized, shown from local copies, and uploaded in the background.
+   */
+  async function apply3mf(result: ImportResult, title?: string) {
     setOptimizing(true);
-    const taken = new Set<string>();
-    const budgets = allocateBudget(groups.map((g) => g.triangles));
-    const created: { part: ProductPart; file: File }[] = [];
     let before = 0;
     let after = 0;
-    for (const [i, g] of groups.entries()) {
-      const prepared = await prepareModel(g.positions, slugify(g.name), budgets[i]);
-      before += prepared.trianglesBefore;
-      after += prepared.trianglesAfter;
-      created.push({
-        file: prepared.file,
-        part: {
+    const uploads: { part: ProductPart; file: File }[] = [];
+    const build = async (groups: ImportGroup[]) => {
+      const taken = new Set<string>();
+      const budgets = allocateBudget(groups.map((g) => g.triangles));
+      const parts: ProductPart[] = [];
+      for (const [i, g] of groups.entries()) {
+        const prepared = await prepareModel(g.positions, slugify(g.name), budgets[i]);
+        before += prepared.trianglesBefore;
+        after += prepared.trianglesAfter;
+        const part: ProductPart = {
           id: nextPartId(g.name, taken),
           name: g.name,
           file: URL.createObjectURL(prepared.file),
           defaultFilament: g.filamentId,
           ...(g.plate > 1 ? { plate: g.plate } : {}),
-        },
-      });
+        };
+        parts.push(part);
+        uploads.push({ part, file: prepared.file });
+      }
+      return parts;
+    };
+    const named = (prev: Product) =>
+      prev.name.trim() || !title ? {} : { name: title.slice(0, 80), ...(slugTouched ? {} : { slug: slugify(title) }) };
+
+    if (result.mode === "options") {
+      const taken = new Set<string>();
+      const created: ProductVariant[] = [];
+      for (const o of result.options) {
+        created.push({
+          id: uniqueSlug(o.name, taken),
+          name: o.name,
+          basePrice: p.basePrice,
+          parts: await build(o.groups),
+          presets: [],
+          dimensions: measureGroups(o.groups),
+          layout: "assembled",
+        });
+      }
+      localFiles.current.clear();
+      setPartUploads({});
+      setProd((prev) => ({
+        ...prev,
+        ...named(prev),
+        upAxis: "z",
+        variantLabel: result.label,
+        variants: created,
+        ...variantFields(created[0]),
+      }));
+      setActiveVariant(created[0].id);
+    } else {
+      const parts = await build(result.groups);
+      setP((prev) => ({
+        ...prev,
+        ...named(prev),
+        parts,
+        presets: [],
+        upAxis: "z",
+        layout: "assembled",
+        dimensions: measureGroups(result.groups),
+      }));
     }
     setOptimizing(false);
-    for (const id of localFiles.current.keys()) localFiles.current.delete(id);
-    setPartUploads({});
-    setP((prev) => ({
-      ...prev,
-      ...(prev.name.trim() || !title ? {} : { name: title.slice(0, 80), ...(slugTouched ? {} : { slug: slugify(title) }) }),
-      parts: created.map((c) => c.part),
-      presets: [],
-      upAxis: "z",
-      layout: "assembled",
-      dimensions: measureGroups(groups),
-    }));
     setPreviewPreset(null);
     setActivePart(null);
+    setArranging(false);
     setPending3mf(null);
-    for (const { part, file } of created) startPartUpload(part.id, file, part.file);
+    for (const { part, file } of uploads) startPartUpload(file, part.file);
     const simplified =
       after < before
         ? ` Detail was reduced from ${fmtCount(before)} to ${fmtCount(after)} triangles so it loads fast (prints aren't affected).`
         : "";
-    setNotice({ kind: "ok", text: `Imported ${created.length} parts.${simplified} Name them and check the colors.` });
+    const what = result.mode === "options" ? `${result.options.length} options` : `${uploads.length} parts`;
+    const next = result.mode === "options" ? "Set a price for each option" : "Name the parts and check the colors";
+    setNotice({ kind: "ok", text: `Imported ${what}.${simplified} ${next}.` });
   }
 
   async function replacePartFile(partId: string, file: File) {
@@ -219,7 +276,7 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
     const localUrl = URL.createObjectURL(prepared.file);
     // The new file has its own geometry, so the old placement no longer applies.
     updatePart(partId, { file: localUrl, transform: undefined });
-    startPartUpload(partId, prepared.file, localUrl);
+    startPartUpload(prepared.file, localUrl);
   }
 
   function setTransforms(transforms: Record<string, PartTransform | undefined>) {
@@ -234,8 +291,11 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
   }
 
   function removePart(id: string) {
-    localFiles.current.delete(id);
-    setPartUploads((u) => omit(u, id));
+    const file = p.parts.find((x) => x.id === id)?.file;
+    if (file) {
+      localFiles.current.delete(file);
+      setPartUploads((u) => omit(u, file));
+    }
     setP((prev) => ({
       ...prev,
       parts: prev.parts.filter((x) => x.id !== id),
@@ -259,21 +319,86 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
   function toggleMaterial(fam: MaterialFamily, on: boolean) {
     const next = FAMILIES.filter((f) => (f === fam ? on : p.materials.includes(f)));
     if (!next.length) return;
-    // Default colors must be in the first material — remap them if it changed.
-    if (next[0] !== p.materials[0]) {
-      const parts = p.parts.map((x) => ({
-        ...x,
-        defaultFilament: remapToFamily(catalog, p, defaults, next[0])[x.id],
-      }));
-      const presets = p.presets.map((ps) => ({
-        ...ps,
-        colors: remapToFamily(catalog, p, { ...defaults, ...ps.colors }, next[0]),
-      }));
-      setP({ ...p, materials: next, parts, presets });
-    } else {
-      set("materials", next);
-    }
+    setProd((prev) => {
+      if (next[0] === prev.materials[0]) return { ...prev, materials: next };
+      // Default colors must be in the first material: remap them in every option.
+      const remapped = prev.variants!.map((v) => {
+        const view = { ...prev, ...variantFields(v) };
+        const d = defaultConfig(view);
+        const colors = remapToFamily(catalog, view, d, next[0]);
+        return {
+          ...v,
+          parts: v.parts.map((x) => ({ ...x, defaultFilament: colors[x.id] })),
+          presets: v.presets.map((ps) => ({ ...ps, colors: remapToFamily(catalog, view, { ...d, ...ps.colors }, next[0]) })),
+        };
+      });
+      return { ...prev, materials: next, variants: remapped, ...variantFields(remapped[0]) };
+    });
   }
+
+  // ── Options (sizes, shapes…) ───────────────────────────────────────────────
+
+  const savedIds = useMemo(() => new Set((JSON.parse(saved) as Product).variants?.map((v) => v.id) ?? []), [saved]);
+
+  function selectVariant(id: string) {
+    setActiveVariant(id);
+    setActivePart(null);
+    setPreviewPreset(null);
+    setArranging(false);
+  }
+
+  function addVariant(duplicate: boolean) {
+    const taken = new Set(variants.map((v) => v.id));
+    const source = variants[vIndex];
+    const name = duplicate ? `${source.name} copy` : `Option ${variants.length + 1}`;
+    const v: ProductVariant = duplicate
+      ? { ...structuredClone(source), id: uniqueSlug(name, taken), name }
+      : { id: uniqueSlug(name, taken), name, basePrice: source.basePrice, parts: [], presets: [], dimensions: [0, 0, 0], layout: "assembled" };
+    setProd((prev) => ({ ...prev, variants: [...prev.variants!, v] }));
+    selectVariant(v.id);
+  }
+
+  function updateVariant(id: string, patch: Partial<Pick<ProductVariant, "name" | "basePrice">>) {
+    // Ids appear in links and carts, so they only follow the name until the first save.
+    let nextId = id;
+    if (patch.name !== undefined && !savedIds.has(id)) {
+      nextId = uniqueSlug(patch.name || "option", new Set(variants.filter((v) => v.id !== id).map((v) => v.id)));
+    }
+    setProd((prev) => {
+      const vs = prev.variants!.map((v) => (v.id === id ? { ...v, ...patch, id: nextId } : v));
+      return { ...prev, variants: vs, ...variantFields(vs[0]) };
+    });
+    if (nextId !== id && activeVariant === id) setActiveVariant(nextId);
+  }
+
+  function moveVariant(id: string, dir: -1 | 1) {
+    setProd((prev) => {
+      const vs = [...prev.variants!];
+      const i = vs.findIndex((v) => v.id === id);
+      const j = i + dir;
+      if (i < 0 || j < 0 || j >= vs.length) return prev;
+      [vs[i], vs[j]] = [vs[j], vs[i]];
+      return { ...prev, variants: vs, ...variantFields(vs[0]) };
+    });
+  }
+
+  function removeVariant(id: string) {
+    const v = variants.find((x) => x.id === id);
+    if (!v || variants.length < 2 || !confirm(`Remove the "${v.name}" option?`)) return;
+    const rest = variants.filter((x) => x.id !== id);
+    setProd((prev) => ({ ...prev, variants: rest, ...variantFields(rest[0]) }));
+    if (id === activeVariant) selectVariant(rest[0].id);
+  }
+
+  // ── Add-ons ────────────────────────────────────────────────────────────────
+
+  const addons = p.addons ?? [];
+  const setAddons = (next: AddonGroup[]) => set("addons", next.map(withAddonIds));
+  const ADDON_TEMPLATES: AddonGroup[] = [
+    { id: "", name: "Attachment", choices: [{ id: "", name: "None", price: 0 }, { id: "", name: "Keyring", price: 1 }] },
+    { id: "", name: "Magnet", choices: [{ id: "", name: "No magnet", price: 0 }, { id: "", name: "Magnet on back", price: 1.5 }] },
+    { id: "", name: "Gift wrap", choices: [{ id: "", name: "No thanks", price: 0 }, { id: "", name: "Gift box", price: 3 }] },
+  ];
 
   // ── Photos ─────────────────────────────────────────────────────────────────
 
@@ -309,8 +434,8 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
   // ── Save / delete ──────────────────────────────────────────────────────────
 
   function save(publish?: boolean) {
-    const next = publish === undefined ? p : { ...p, published: publish };
-    if (publish !== undefined) setP(next);
+    const next = publish === undefined ? prod : { ...prod, published: publish };
+    if (publish !== undefined) setProd(next);
     start(async () => {
       const res = await saveProduct(next);
       if (!res.ok) {
@@ -329,7 +454,7 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
     start(async () => {
       const res = await deleteProduct(p.id);
       if (res.ok) {
-        setSaved(JSON.stringify(p)); // don't trigger the unsaved-changes warning
+        setSaved(JSON.stringify(prod)); // don't trigger the unsaved-changes warning
         router.push("/admin/products");
       } else setNotice({ kind: "error", text: res.error });
     });
@@ -338,9 +463,10 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
   const blockers = [
     !p.name.trim() && "a name",
     !p.slug && "a URL name",
-    !p.parts.length && "at least one STL",
-    p.parts.some((x) => !x.defaultFilament) && "a default color for every part",
-    p.parts.some((x) => x.file.startsWith("blob:")) &&
+    variants.some((v) => !v.parts.length) && (variants.length > 1 ? "a model for every option" : "at least one model"),
+    variants.length > 1 && variants.some((v) => !v.name.trim()) && "a name for every option",
+    variants.some((v) => v.parts.some((x) => !x.defaultFilament)) && "a default color for every part",
+    variants.some((v) => v.parts.some((x) => x.file.startsWith("blob:"))) &&
       (Object.values(partUploads).some((u) => u.error) ? "failed uploads fixed (retry or remove them)" : "uploads to finish"),
   ].filter(Boolean) as string[];
 
@@ -360,6 +486,26 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
         )}
       </div>
 
+      {variants.length > 1 && (
+        <div className="chunky mt-6 flex flex-wrap items-center gap-2 rounded-3xl bg-grape-soft px-4 py-3" role="tablist" aria-label="Option being edited">
+          <span className="mr-1 text-sm font-bold">Editing {(p.variantLabel || "option").toLowerCase()}:</span>
+          {variants.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              role="tab"
+              aria-selected={v.id === activeVariant}
+              onClick={() => selectVariant(v.id)}
+              className={`chip focus-ring ${v.id === activeVariant ? "bg-ink text-cream" : ""}`}
+            >
+              {v.name || "Untitled"}
+              {!v.parts.length && <span className="text-tomato" title="No model yet">●</span>}
+            </button>
+          ))}
+          <span className="ml-auto text-xs text-ink-soft">Preview, parts, palettes, price and size below are for this option.</span>
+        </div>
+      )}
+
       {arranging && (
         <section className="chunky mt-8 overflow-hidden rounded-[32px] bg-paper" aria-label="Arrange pieces">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-ink px-4 py-3">
@@ -376,6 +522,7 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
           </div>
           <div className="h-[70vh] min-h-[420px]">
             <AssemblyEditor
+              key={activeVariant}
               product={p}
               config={previewConfig}
               selected={activePart}
@@ -396,6 +543,7 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
               </div>
             ) : p.parts.length ? (
               <ModelViewer
+                key={activeVariant}
                 product={p}
                 config={previewConfig}
                 activePart={activePart}
@@ -523,7 +671,9 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
           <section className="admin-card space-y-4">
             <h2 className="admin-h2">Price & materials</h2>
             <label className="block">
-              <span className="admin-label">Base price</span>
+              <span className="admin-label">
+                {variants.length > 1 ? `Base price for ${variants[vIndex].name || "this option"}` : "Base price"}
+              </span>
               <div className="relative max-w-40">
                 <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-soft">$</span>
                 <input className="admin-input pl-7" type="number" min={0} step={0.5} value={p.basePrice} onChange={(e) => set("basePrice", Number(e.target.value))} />
@@ -552,7 +702,179 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
 
           <section className="admin-card space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <h2 className="admin-h2">Parts & default colors</h2>
+              <h2 className="admin-h2">Options</h2>
+              <div className="flex gap-2">
+                {variants.length > 1 && (
+                  <button type="button" className="btn btn-secondary btn-sm" onClick={() => addVariant(true)}>
+                    Duplicate
+                  </button>
+                )}
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => addVariant(false)}>
+                  + Add option
+                </button>
+              </div>
+            </div>
+            {variants.length === 1 ? (
+              <p className="text-sm text-ink-soft">
+                Does this come in different sizes, shapes or versions? Add options and customers pick one, each with its
+                own model and price. Tip: drop a .3mf with several objects below and choose <strong>Options to choose from</strong>.
+              </p>
+            ) : (
+              <>
+                <label className="flex flex-wrap items-center gap-2">
+                  <span className="admin-label mb-0">Customers pick a</span>
+                  <input
+                    className="admin-input w-40 py-1.5"
+                    value={p.variantLabel ?? ""}
+                    placeholder="Size"
+                    maxLength={24}
+                    onChange={(e) => set("variantLabel", e.target.value || undefined)}
+                    aria-label="Option label"
+                  />
+                </label>
+                <ul className="space-y-2">
+                  {variants.map((v, i) => (
+                    <li
+                      key={v.id}
+                      className={`flex flex-wrap items-center gap-2 rounded-2xl border-2 p-2 ${v.id === activeVariant ? "border-ink bg-grape-soft" : "border-ink/15"}`}
+                    >
+                      <div className="flex flex-col">
+                        <button type="button" aria-label="Move up" disabled={i === 0} onClick={() => moveVariant(v.id, -1)} className="px-1 leading-none disabled:opacity-20">
+                          ▲
+                        </button>
+                        <button type="button" aria-label="Move down" disabled={i === variants.length - 1} onClick={() => moveVariant(v.id, 1)} className="px-1 leading-none disabled:opacity-20">
+                          ▼
+                        </button>
+                      </div>
+                      <input
+                        className="admin-input min-w-32 flex-1 py-1.5"
+                        value={v.name}
+                        maxLength={40}
+                        aria-label="Option name"
+                        onChange={(e) => updateVariant(v.id, { name: e.target.value })}
+                      />
+                      <div className="relative w-24">
+                        <span className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-ink-soft">$</span>
+                        <input
+                          className="admin-input py-1.5 pl-7"
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          value={v.basePrice}
+                          aria-label={`${v.name} price`}
+                          onChange={(e) => updateVariant(v.id, { basePrice: Number(e.target.value) })}
+                        />
+                      </div>
+                      <span className={`w-16 text-xs ${v.parts.length ? "text-ink-soft" : "font-semibold text-tomato"}`}>
+                        {v.parts.length ? `${v.parts.length} ${v.parts.length === 1 ? "part" : "parts"}` : "No model"}
+                      </span>
+                      {v.id !== activeVariant && (
+                        <button type="button" onClick={() => selectVariant(v.id)} className="text-sm font-semibold underline decoration-2 underline-offset-4">
+                          Edit
+                        </button>
+                      )}
+                      <button type="button" onClick={() => removeVariant(v.id)} className="text-sm font-semibold text-tomato underline decoration-2 underline-offset-4">
+                        Remove
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <p className="admin-hint">The first option is what customers see first and on product cards.</p>
+              </>
+            )}
+          </section>
+
+          <section className="admin-card space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="admin-h2">Add-ons</h2>
+              <div className="flex flex-wrap gap-2">
+                {ADDON_TEMPLATES.filter((t) => !addons.some((a) => a.name === t.name)).map((t) => (
+                  <button key={t.name} type="button" className="chip text-xs" onClick={() => setAddons([...addons, t])}>
+                    + {t.name}
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  className="chip text-xs"
+                  onClick={() =>
+                    setAddons([...addons, { id: "", name: `Extra ${addons.length + 1}`, choices: [{ id: "", name: "None", price: 0 }, { id: "", name: "Yes", price: 1 }] }])
+                  }
+                >
+                  + Custom
+                </button>
+              </div>
+            </div>
+            <p className="text-sm text-ink-soft">
+              Extras that only change the price, like a keyring or gift box. The first choice is the default.
+            </p>
+            {addons.map((g, gi) => {
+              const update = (next: AddonGroup) => setAddons(addons.map((x, j) => (j === gi ? next : x)));
+              return (
+                <div key={gi} className="space-y-2 rounded-2xl border-2 border-ink/15 p-3">
+                  <div className="flex items-center gap-2">
+                    <input
+                      className="admin-input py-1.5 font-semibold"
+                      value={g.name}
+                      maxLength={40}
+                      aria-label="Add-on name"
+                      onChange={(e) => update({ ...g, name: e.target.value })}
+                    />
+                    <button type="button" onClick={() => setAddons(addons.filter((_, j) => j !== gi))} className="text-sm font-semibold text-tomato underline decoration-2 underline-offset-4">
+                      Remove
+                    </button>
+                  </div>
+                  {g.choices.map((c, ci) => (
+                    <div key={ci} className="flex items-center gap-2 pl-3">
+                      <input
+                        className="admin-input py-1 text-sm"
+                        value={c.name}
+                        maxLength={40}
+                        aria-label="Choice name"
+                        onChange={(e) => update({ ...g, choices: g.choices.map((x, k) => (k === ci ? { ...x, name: e.target.value } : x)) })}
+                      />
+                      <div className="relative w-24 shrink-0">
+                        <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-sm text-ink-soft">+$</span>
+                        <input
+                          className="admin-input py-1 pl-8 text-sm"
+                          type="number"
+                          min={0}
+                          step={0.5}
+                          value={c.price}
+                          aria-label={`${c.name} price`}
+                          onChange={(e) =>
+                            update({ ...g, choices: g.choices.map((x, k) => (k === ci ? { ...x, price: Number(e.target.value) } : x)) })
+                          }
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        disabled={g.choices.length <= 2}
+                        onClick={() => update({ ...g, choices: g.choices.filter((_, k) => k !== ci) })}
+                        className="px-1 text-lg leading-none text-ink-soft disabled:opacity-20"
+                        aria-label="Remove choice"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  <button
+                    type="button"
+                    onClick={() => update({ ...g, choices: [...g.choices, { id: "", name: `Choice ${g.choices.length + 1}`, price: 0 }] })}
+                    className="pl-3 text-sm font-semibold underline decoration-2 underline-offset-4"
+                  >
+                    + Add choice
+                  </button>
+                </div>
+              );
+            })}
+          </section>
+
+          <section className="admin-card space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="admin-h2">
+                Parts & default colors
+                {variants.length > 1 && <span className="font-sans text-base font-semibold text-ink-soft"> · {variants[vIndex].name}</span>}
+              </h2>
               <span className="flex flex-wrap gap-x-3 text-sm font-semibold">
                 {[...plateColors].map(([plate, ids]) => (
                   <span key={plate} className={ids.length > MAX_COLORS ? "text-tomato" : "text-ink-soft"}>
@@ -618,7 +940,7 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
                     <button type="button" onClick={() => removePart(part.id)} className="text-sm font-semibold text-tomato underline decoration-2 underline-offset-4">
                       Remove
                     </button>
-                    {partUploads[part.id] && <PartUploadStatus status={partUploads[part.id]} onRetry={() => retryUpload(part.id)} />}
+                    {partUploads[part.file] && <PartUploadStatus status={partUploads[part.file]} onRetry={() => retryUpload(part.file)} />}
                   </li>
                 ))}
               </ul>
@@ -804,9 +1126,10 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
           fileName={pending3mf.fileName}
           family={family}
           replacing={p.parts.length}
+          replacingOptions={variants.length > 1 ? variants.length : p.parts.length ? 1 : 0}
           onCancel={() => setPending3mf(null)}
           busy={optimizing}
-          onImport={(groups) => apply3mf(groups, pending3mf.model.title)}
+          onImport={(result) => apply3mf(result, pending3mf.model.title)}
         />
       )}
 
@@ -884,6 +1207,37 @@ function DropZone({ accept, label, hint, onFiles }: { accept: string; label: str
       />
     </div>
   );
+}
+
+/** Apply an edit made to the option view back into the full product. */
+function applyView(prev: Product, activeId: string, u: Product | ((view: Product) => Product)): Product {
+  const vs = prev.variants ?? [];
+  const i = Math.max(0, vs.findIndex((v) => v.id === activeId));
+  const view = { ...prev, ...variantFields(vs[i]) };
+  const next = typeof u === "function" ? u(view) : u;
+  const { basePrice, parts, presets, dimensions, layout, ...rest } = next;
+  const updated = vs.map((v, j) => (j === i ? { ...v, basePrice, parts, presets, dimensions, layout } : v));
+  return { ...rest, variants: updated, ...variantFields(updated[0]) };
+}
+
+/** Replace a model URL everywhere it's used (every option's parts). */
+function swapFile(prev: Product, from: string, to: string): Product {
+  const swap = (parts: ProductPart[]) => parts.map((x) => (x.file === from ? { ...x, file: to } : x));
+  return { ...prev, parts: swap(prev.parts), variants: prev.variants?.map((v) => ({ ...v, parts: swap(v.parts) })) };
+}
+
+function uniqueSlug(name: string, taken: Set<string>): string {
+  const base = slugify(name).slice(0, 36) || "option";
+  let id = base;
+  for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
+  taken.add(id);
+  return id;
+}
+
+/** Add-on and choice ids follow their names (they're only used in links and carts). */
+function withAddonIds(g: AddonGroup): AddonGroup {
+  const taken = new Set<string>();
+  return { ...g, id: slugify(g.name) || "addon", choices: g.choices.map((c) => ({ ...c, id: uniqueSlug(c.name || "choice", taken) })) };
 }
 
 const fmtCount = (n: number) => (n >= 1_000_000 ? `${(n / 1_000_000).toFixed(1)}M` : `${Math.round(n / 1000)}k`);

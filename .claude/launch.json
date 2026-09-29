@@ -4,7 +4,22 @@
     {
       "name": "dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 3000
+    },
+    {
+      "name": "dev-offline",
+      "runtimeExecutable": "env",
+      "runtimeArgs": [
+        "SUPABASE_URL=",
+        "SUPABASE_SECRET_KEY=",
+        "npm",
+        "run",
+        "dev"
+      ],
       "port": 3000
     }
   ]

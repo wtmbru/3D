@@ -9,6 +9,7 @@ import { MAX_QTY, useCart, type CartItem } from "@/lib/cart";
 import { designHref } from "@/lib/config";
 import { formatPrice, getFilament, quote } from "@/lib/pricing";
 import type { Product } from "@/lib/types";
+import { describeAddons, findVariant, hasOptions, resolveVariant, variantsOf } from "@/lib/variants";
 
 function useHydrated() {
   return useSyncExternalStore(
@@ -23,11 +24,14 @@ export function CartView({ products }: { products: Product[] }) {
   const hydrated = useHydrated();
   const items = useCart((s) => s.items);
 
-  // Drop lines whose product was removed or unpublished.
+  // Drop lines whose product (or chosen option) was removed or unpublished.
   const lines = items
     .map((item) => {
-      const product = products.find((p) => p.slug === item.slug);
-      return product ? { item, product, unit: quote(catalog, product, item.family, item.config).unit } : null;
+      const full = products.find((p) => p.slug === item.slug);
+      if (!full) return null;
+      if (item.variant && !variantsOf(full).some((v) => v.id === item.variant)) return null;
+      const product = resolveVariant(full, item.variant);
+      return { item, full, product, unit: quote(catalog, product, item.family, item.config, item.addons).unit };
     })
     .filter((l) => l !== null);
 
@@ -52,8 +56,8 @@ export function CartView({ products }: { products: Product[] }) {
   return (
     <div className="mt-10 grid items-start gap-8 lg:grid-cols-[1fr_360px]">
       <ul className="space-y-4">
-        {lines.map(({ item, product, unit }, i) => (
-          <CartLine key={item.key} item={item} product={product} unit={unit} index={i} />
+        {lines.map(({ item, full, product, unit }, i) => (
+          <CartLine key={item.key} item={item} full={full} product={product} unit={unit} index={i} />
         ))}
       </ul>
 
@@ -90,11 +94,14 @@ const tiles = ["bg-sky-soft", "bg-mint-soft", "bg-bubble-soft", "bg-sun-soft"];
 
 function CartLine({
   item,
+  full,
   product,
   unit,
   index,
 }: {
   item: CartItem;
+  full: Product;
+  /** The chosen option, resolved. */
   product: Product;
   unit: number;
   index: number;
@@ -102,11 +109,18 @@ function CartLine({
   const catalog = useCatalog();
   const setQty = useCart((s) => s.setQty);
   const remove = useCart((s) => s.remove);
+  const href = designHref(full, {
+    variantId: findVariant(full, item.variant).id,
+    family: item.family,
+    config: item.config,
+    addons: item.addons ?? {},
+  });
+  const extras = describeAddons(full, item.addons ?? {});
 
   return (
     <li className="chunky flex flex-col gap-4 rounded-[var(--radius-blob)] bg-paper p-4 sm:flex-row">
       <Link
-        href={designHref(product, item.family, item.config)}
+        href={href}
         className={`layer-lines relative aspect-square w-full shrink-0 rounded-2xl border-2 border-ink sm:w-36 ${tiles[index % tiles.length]}`}
       >
         <ProductThumb product={product} config={item.config} preferPhoto={false} className="absolute inset-2" />
@@ -115,7 +129,11 @@ function CartLine({
         <div className="flex items-start justify-between gap-3">
           <div>
             <h3 className="font-display text-xl font-extrabold">{product.name}</h3>
-            <p className="text-sm text-ink-soft">{item.family}</p>
+            <p className="text-sm text-ink-soft">
+              {hasOptions(full) && <span className="font-semibold text-ink">{findVariant(full, item.variant).name} · </span>}
+              {item.family}
+              {extras.length > 0 && ` · ${extras.join(" · ")}`}
+            </p>
           </div>
           <p className="font-display text-xl font-extrabold tabular-nums">{formatPrice(unit * item.qty)}</p>
         </div>
@@ -143,7 +161,7 @@ function CartLine({
           </div>
           <span className="text-sm text-ink-soft tabular-nums">{formatPrice(unit)} each</span>
           <span className="flex-1" />
-          <Link href={designHref(product, item.family, item.config)} className="text-sm font-semibold underline decoration-2 underline-offset-4">
+          <Link href={href} className="text-sm font-semibold underline decoration-2 underline-offset-4">
             Edit colors
           </Link>
           <button type="button" onClick={() => remove(item.key)} className="text-sm font-semibold text-tomato underline decoration-2 underline-offset-4">

@@ -171,4 +171,49 @@ export const seedProducts: Product[] = [
     leadTimeDays: 3,
     upAxis: "z",
   },
+  {
+    id: "stud-brick-charm",
+    slug: "stud-brick-charm",
+    published: true,
+    name: "Stud Brick Charm",
+    tagline: "A chunky little building brick in the size you like.",
+    description:
+      "A satisfying stud brick in four sizes. Add a keyring to clip it on your bag or keys. Pick a size, choose your color, and we'll print it for you.",
+    category: "accessories",
+    basePrice: 5,
+    materials: ["PLA"],
+    parts: [part("stud-brick-1x1", "brick", "Brick", "matte-sakura")],
+    presets: [],
+    dimensions: [16, 16, 15],
+    leadTimeDays: 2,
+    upAxis: "z",
+    badge: "New",
+    variantLabel: "Size",
+    variants: (
+      [
+        ["1x1", "1×1", 5, [16, 16, 15], "matte-sakura"],
+        ["1x2", "1×2", 6, [16, 32, 15], "matte-latte"],
+        ["2x2", "2×2", 7, [32, 32, 15], "matte-sky"],
+        ["2x3", "2×3", 8, [32, 48, 15], "matte-mint"],
+      ] as const
+    ).map(([id, name, basePrice, dimensions, color]) => ({
+      id,
+      name,
+      basePrice,
+      parts: [part(`stud-brick-${id}`, "brick", "Brick", color)],
+      presets: [],
+      dimensions: [...dimensions] as [number, number, number],
+      layout: "assembled" as const,
+    })),
+    addons: [
+      {
+        id: "attachment",
+        name: "Attachment",
+        choices: [
+          { id: "none", name: "None", price: 0 },
+          { id: "keyring", name: "Keyring", price: 1 },
+        ],
+      },
+    ],
+  },
 ];

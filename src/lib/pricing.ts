@@ -1,4 +1,5 @@
-import type { Catalog, ColorConfig, Filament, MaterialFamily, Product } from "./types";
+import type { AddonSelection, Catalog, ColorConfig, Filament, MaterialFamily, Product } from "./types";
+import { addonLines, resolveVariant, variantsOf } from "./variants";
 
 /** One AMS unit = 4 spools, so one print can use up to 4 filaments. */
 export const MAX_COLORS = 4;
@@ -52,7 +53,14 @@ export function platesOverLimit(product: Pick<Product, "parts">, config: ColorCo
   return [...colorsByPlate(product, config)].filter(([, ids]) => ids.length > MAX_COLORS).map(([plate]) => plate);
 }
 
-export function quote(catalog: Catalog, product: Product, family: MaterialFamily, config: ColorConfig): PriceQuote {
+/** Price for one design. `product` is a resolved option (see resolveVariant). */
+export function quote(
+  catalog: Catalog,
+  product: Product,
+  family: MaterialFamily,
+  config: ColorConfig,
+  addons: AddonSelection = {},
+): PriceQuote {
   const lines: PriceLine[] = [{ label: "Base price", amount: product.basePrice }];
 
   const mat = catalog.materials.find((m) => m.family === family);
@@ -73,6 +81,8 @@ export function quote(catalog: Catalog, product: Product, family: MaterialFamily
     if (f && f.surcharge > 0) lines.push({ label: f.name, amount: f.surcharge });
   }
 
+  lines.push(...addonLines(product, addons));
+
   return { unit: lines.reduce((sum, l) => sum + l.amount, 0), lines };
 }
 
@@ -84,9 +94,14 @@ export function formatPrice(amount: number): string {
   }).format(amount);
 }
 
-/** Price shown on cards: base plus the extra-color fee for the default colors. */
+/** Price shown on cards: the cheapest option in its default colors. */
 export function startingPrice(catalog: Catalog, product: Product): number {
-  return quote(catalog, product, product.materials[0], defaultConfig(product)).unit;
+  return Math.min(
+    ...variantsOf(product).map((v) => {
+      const view = resolveVariant(product, v.id);
+      return quote(catalog, view, view.materials[0], defaultConfig(view)).unit;
+    }),
+  );
 }
 
 export function defaultConfig(product: Product): ColorConfig {

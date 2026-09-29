@@ -43,6 +43,10 @@ export type ProductRow = {
   badge: string | null;
   published: boolean;
   sort: number;
+  // Added in migration 0002; absent until it has been run.
+  variants?: Product["variants"];
+  variant_label?: string | null;
+  addons?: Product["addons"];
 };
 
 const toMaterial = (r: MaterialRow): MaterialInfo => ({
@@ -83,6 +87,9 @@ export const toProduct = (r: ProductRow): Product => ({
   featured: r.featured,
   ...(r.badge ? { badge: r.badge } : {}),
   published: r.published,
+  ...(r.variants?.length ? { variants: r.variants } : {}),
+  ...(r.variant_label ? { variantLabel: r.variant_label } : {}),
+  ...(r.addons?.length ? { addons: r.addons } : {}),
 });
 
 export function toProductRow(p: Product): Omit<ProductRow, "sort"> {
@@ -105,6 +112,9 @@ export function toProductRow(p: Product): Omit<ProductRow, "sort"> {
     featured: !!p.featured,
     badge: p.badge || null,
     published: p.published,
+    variants: p.variants ?? [],
+    variant_label: p.variantLabel || null,
+    addons: p.addons ?? [],
   };
 }
 

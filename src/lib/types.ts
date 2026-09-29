@@ -98,7 +98,38 @@ export interface Product {
   badge?: string;
   /** Drafts are only visible in the admin panel. */
   published: boolean;
+  /**
+   * Options customers pick between (sizes, shapes…), each with its own model
+   * and price. Empty/absent = a single-option product described by the
+   * top-level fields. When present, the top-level fields mirror variants[0].
+   * Always go through resolveVariant() rather than reading these directly.
+   */
+  variants?: ProductVariant[];
+  /** What the options are called on the product page, e.g. "Size". */
+  variantLabel?: string;
+  /** Extras that only change the price (keyring, magnet, gift box…). */
+  addons?: AddonGroup[];
 }
+
+/** The model-specific fields of a product, per option. */
+export type VariantFields = Pick<Product, "basePrice" | "parts" | "presets" | "dimensions" | "layout">;
+
+export interface ProductVariant extends VariantFields {
+  /** Stable id used in links and carts, e.g. "2x2". */
+  id: string;
+  name: string;
+}
+
+export interface AddonGroup {
+  id: string;
+  /** e.g. "Attachment" */
+  name: string;
+  /** First choice is the default; usually "None" at $0. */
+  choices: { id: string; name: string; price: number }[];
+}
+
+/** groupId → choiceId */
+export type AddonSelection = Record<string, string>;
 
 /** partId → filamentId */
 export type ColorConfig = Record<string, string>;

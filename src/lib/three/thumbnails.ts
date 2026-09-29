@@ -80,3 +80,43 @@ export function renderThumbnail(catalog: Catalog, product: Product, config: Colo
   }
   return pending;
 }
+
+/**
+ * Preview raw imported geometry (triangle soups in slicer Z-up space), e.g.
+ * one picture per object in the .3mf import dialog.
+ */
+export function renderSoupPreview(meshes: { positions: Float32Array; hex: string }[]): Promise<string> {
+  const run = async () => {
+    const r = getRenderer();
+    const scene = new THREE.Scene();
+    scene.environment = envMap;
+    const key = new THREE.DirectionalLight(0xffffff, 1.6);
+    key.position.set(1, 2, 1.5);
+    scene.add(key);
+    const root = new THREE.Group();
+    root.rotation.x = -Math.PI / 2; // Z-up → Y-up
+    const disposables: { dispose(): void }[] = [];
+    for (const m of meshes) {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(m.positions, 3));
+      geo.computeVertexNormals();
+      const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(m.hex), roughness: 0.55 });
+      root.add(new THREE.Mesh(geo, mat));
+      disposables.push(geo, mat);
+    }
+    scene.add(root);
+    root.updateMatrixWorld(true);
+    const box = new THREE.Box3().setFromObject(root);
+    const sphere = box.getBoundingSphere(new THREE.Sphere());
+    const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 10000);
+    camera.position.copy(sphere.center).addScaledVector(new THREE.Vector3(0.55, 0.5, 1).normalize(), fitDistance(sphere.radius, 30, 1, 1.05));
+    camera.lookAt(sphere.center);
+    r.render(scene, camera);
+    const url = r.domElement.toDataURL("image/png");
+    disposables.forEach((d) => d.dispose());
+    return url;
+  };
+  const pending = queue.then(run);
+  queue = pending.catch(() => undefined);
+  return pending;
+}
