@@ -185,7 +185,7 @@ function FilamentDialog({ draft, onClose, onSaved }: { draft: Draft; onClose: ()
         className="space-y-4 p-6"
       >
         <div className="flex items-center gap-4">
-          <span className="h-16 w-16 shrink-0 rounded-2xl border-2 border-ink" style={swatchBackground({ ...f, id: "preview" })} />
+          <span className="h-16 w-16 shrink-0 rounded-2xl border-2 border-ink" style={swatchBackground(f)} />
           <div>
             <h2 className="admin-h2">{isNew ? "Add a filament" : `Edit ${draft.name}`}</h2>
             {!isNew && <p className="font-mono text-xs text-ink-soft">id: {draft.id}</p>}

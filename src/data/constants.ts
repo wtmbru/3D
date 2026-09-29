@@ -1,5 +1,8 @@
 import type { Category, Finish, MaterialFamily } from "@/lib/types";
 
+/** Most colors a customer can pick on a custom print request. */
+export const MAX_REQUEST_COLORS = 8;
+
 /** Most photos one product can have. */
 export const MAX_PHOTOS = 12;
 

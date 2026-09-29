@@ -12,6 +12,16 @@ export const REQUEST_STATUSES: { id: RequestStatus; label: string; tone: string;
   { id: "declined", label: "Declined", tone: "bg-cream-deep", hint: "Won't be made" },
 ];
 
+import type { Filament } from "./types";
+
+/** A color the customer picked, saved as it was at the time. */
+export type RequestColor = Pick<Filament, "id" | "name" | "family" | "finish" | "hex" | "hex2">;
+
+/** "Sunflower, Mint (PLA)" style summary for messages. */
+export function colorsSummary(colors: RequestColor[] | undefined): string {
+  return (colors ?? []).map((c) => `${c.name} (${c.family})`).join(", ");
+}
+
 export interface CustomRequest {
   id: string;
   /** Friendly number shown to people: 101, 102… */
@@ -23,6 +33,8 @@ export interface CustomRequest {
   modelUrl: string;
   message: string;
   quantity: number;
+  /** Colors picked from what's in stock (may be empty). */
+  colors: RequestColor[];
   status: RequestStatus;
   /** Her reply. */
   quotePrice?: number;

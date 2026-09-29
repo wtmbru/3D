@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { swatchBackground } from "@/components/Swatch";
 import { site } from "@/config/site";
 import { linkHost, REQUEST_STATUSES, requestLabel } from "@/lib/requests";
 import { formatPrice } from "@/lib/pricing";
@@ -102,6 +103,21 @@ export default async function RequestPage(props: PageProps<"/request/[id]">) {
             <dt className="font-semibold text-ink-soft">How many</dt>
             <dd>{request.quantity}</dd>
           </div>
+          {request.colors.length > 0 && (
+            <div>
+              <dt className="font-semibold text-ink-soft">Colors you picked</dt>
+              <dd>
+<ul className="mt-1 flex flex-wrap gap-2" aria-label="Colors picked">
+  {request.colors.map((c) => (
+    <li key={c.id} className="chip flex items-center gap-2 bg-cream-deep">
+      <span className="inline-block h-4 w-4 rounded-full border-2 border-ink" style={swatchBackground(c)} />
+      {c.name} <span className="text-ink-soft">{c.family}</span>
+    </li>
+  ))}
+</ul>
+              </dd>
+            </div>
+          )}
           <div>
             <dt className="font-semibold text-ink-soft">Your message</dt>
             <dd className="whitespace-pre-wrap">{request.message}</dd>

@@ -1,7 +1,7 @@
 import type { Filament } from "@/lib/types";
 
 /** CSS background that hints at the finish: silk shimmer, sparkle flecks, translucency. */
-export function swatchBackground(f: Filament): React.CSSProperties {
+export function swatchBackground(f: Pick<Filament, "finish" | "hex" | "hex2">): React.CSSProperties {
   switch (f.finish) {
     case "silk":
       return { background: `linear-gradient(135deg, ${f.hex} 0%, ${f.hex2 ?? f.hex} 45%, ${f.hex} 70%, ${f.hex2 ?? f.hex} 100%)` };
@@ -26,7 +26,7 @@ export function swatchBackground(f: Filament): React.CSSProperties {
   }
 }
 
-export function SwatchDot({ filament, size = 20, className = "" }: { filament: Filament; size?: number; className?: string }) {
+export function SwatchDot({ filament, size = 20, className = "" }: { filament: Pick<Filament, "finish" | "hex" | "hex2" | "name">; size?: number; className?: string }) {
   return (
     <span
       className={`inline-block shrink-0 rounded-full border-2 border-ink ${className}`}

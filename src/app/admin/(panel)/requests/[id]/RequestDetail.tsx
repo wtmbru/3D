@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useOptimistic, useState, useTransition } from "react";
+import { swatchBackground } from "@/components/Swatch";
 import { formatPrice } from "@/lib/pricing";
 import { parseLink, REQUEST_STATUSES, replyText, requestLabel, type CustomRequest, type RequestStatus } from "@/lib/requests";
 import { removeRequest, saveRequestNotes, sendQuote, setRequestStatus } from "../../../request-actions";
@@ -111,6 +112,16 @@ export function RequestDetail({ request }: { request: CustomRequest }) {
 
             <h3 className="mt-5 text-xs font-bold tracking-wide text-ink-soft uppercase">What they want</h3>
             <p className="mt-1 whitespace-pre-wrap text-[15px]">{request.message}</p>
+            {request.colors.length > 0 && (
+<ul className="mt-3 flex flex-wrap gap-2" aria-label="Colors picked">
+  {request.colors.map((c) => (
+    <li key={c.id} className="chip flex items-center gap-2 bg-cream-deep">
+      <span className="inline-block h-4 w-4 rounded-full border-2 border-ink" style={swatchBackground(c)} />
+      {c.name} <span className="text-ink-soft">{c.family}</span>
+    </li>
+  ))}
+</ul>
+)}
             <p className="mt-3 text-sm">
               <span className="font-semibold text-ink-soft">Quantity:</span> <strong>{request.quantity}</strong>
             </p>

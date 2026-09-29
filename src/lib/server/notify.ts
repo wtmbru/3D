@@ -1,7 +1,7 @@
 import "server-only";
 import { site } from "@/config/site";
 import { orderLabel, paymentLabel, type Order } from "@/lib/orders";
-import { linkHost, requestLabel, type CustomRequest } from "@/lib/requests";
+import { colorsSummary, linkHost, requestLabel, type CustomRequest } from "@/lib/requests";
 import { formatPrice } from "@/lib/pricing";
 
 /*
@@ -125,6 +125,7 @@ export function requestMessage(r: CustomRequest): ReturnType<typeof orderMessage
   const adminUrl = base ? `${base}/admin/requests/${r.id}` : undefined;
   const host = linkHost(r.modelUrl);
   const subject = `New custom print request ${requestLabel(r.number)} · ${oneLine(r.name)} · ${host}`;
+  const colors = colorsSummary(r.colors);
   const message = r.message.length > 600 ? `${r.message.slice(0, 600)}…` : r.message;
 
   const text = [
@@ -136,6 +137,7 @@ export function requestMessage(r: CustomRequest): ReturnType<typeof orderMessage
     ``,
     `Model (${host}): ${r.modelUrl}`,
     `Quantity: ${r.quantity}`,
+    ...(colors ? [`Colors picked: ${colors}`] : []),
     ``,
     `Their message:`,
     // Quoted line by line so nothing in it can pass for one of our own lines.
@@ -153,13 +155,14 @@ export function requestMessage(r: CustomRequest): ReturnType<typeof orderMessage
 <hr style="border:none;border-top:2px dashed #e5dcc9;margin:18px 0">
 <p style="margin:0"><strong>Model:</strong> <a href="${esc(r.modelUrl)}" style="color:#1f1640">${esc(r.modelUrl.length > 80 ? `${r.modelUrl.slice(0, 80)}…` : r.modelUrl)}</a> <span style="color:#5b527a">(${esc(host)})</span></p>
 <p style="margin:6px 0 0"><strong>Quantity:</strong> ${r.quantity}</p>
+${colors ? `<p style="margin:6px 0 0"><strong>Colors picked:</strong> ${esc(colors)}</p>` : ""}
 <p style="margin:16px 0 0;padding:12px 14px;background:#fff0c2;border-radius:12px;white-space:pre-wrap">${esc(message)}</p>
 ${adminUrl ? `<p style="margin:22px 0 0"><a href="${esc(adminUrl)}" style="display:inline-block;background:#ff5e3a;color:#fff;font-weight:700;text-decoration:none;padding:12px 22px;border-radius:999px;border:2px solid #1f1640">Review and send a price</a></p>` : ""}
 </div></body></html>`;
 
   const push = {
     title: `Custom request ${requestLabel(r.number)}`.slice(0, 250),
-    message: `${oneLine(r.name)} · ${host}\n${oneLine(r.message)}`.slice(0, 1000),
+    message: `${oneLine(r.name)} · ${host}${colors ? `\n🎨 ${oneLine(colors)}` : ""}\n${oneLine(r.message)}`.slice(0, 1000),
     url: adminUrl,
   };
   return { subject, text, html, push };

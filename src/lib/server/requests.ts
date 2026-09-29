@@ -1,6 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
-import type { CustomRequest, RequestStatus } from "@/lib/requests";
+import { colorsSummary, type CustomRequest, type RequestColor, type RequestStatus } from "@/lib/requests";
 import { isSupabaseConfigured, supabaseAdmin } from "./supabase";
 
 /*
@@ -18,6 +18,7 @@ type Row = {
   model_url: string;
   message: string;
   quantity: number;
+  colors?: RequestColor[]; // absent until migration 0005 has been run
   status: RequestStatus;
   quote_price: string | number | null;
   quote_note: string | null;
@@ -35,6 +36,7 @@ const fromRow = (r: Row): CustomRequest => ({
   modelUrl: r.model_url,
   message: r.message,
   quantity: r.quantity,
+  colors: r.colors ?? [],
   status: r.status,
   ...(r.quote_price !== null ? { quotePrice: Number(r.quote_price) } : {}),
   ...(r.quote_note ? { quoteNote: r.quote_note } : {}),
@@ -49,6 +51,7 @@ export interface NewRequest {
   modelUrl: string;
   message: string;
   quantity: number;
+  colors?: RequestColor[];
   ipHash?: string;
 }
 
@@ -90,25 +93,29 @@ export async function insertRequest(r: NewRequest): Promise<CustomRequest> {
       modelUrl: r.modelUrl,
       message: r.message,
       quantity: r.quantity,
+      colors: r.colors ?? [],
       status: "new",
       ipHash: r.ipHash,
     };
     m.list.unshift(req);
     return req;
   }
-  const { data, error } = await supabaseAdmin()
-    .from("custom_requests")
-    .insert({
-      customer_name: r.name,
-      email: r.email,
-      phone: r.phone,
-      model_url: r.modelUrl,
-      message: r.message,
-      quantity: r.quantity,
-      ip_hash: r.ipHash ?? null,
-    })
-    .select("*")
-    .single();
+  const base = {
+    customer_name: r.name,
+    email: r.email,
+    phone: r.phone,
+    model_url: r.modelUrl,
+    quantity: r.quantity,
+    ip_hash: r.ipHash ?? null,
+  };
+  const colors = r.colors ?? [];
+  const insert = (row: object) => supabaseAdmin().from("custom_requests").insert(row).select("*").single();
+  let { data, error } = await insert({ ...base, message: r.message, ...(colors.length ? { colors } : {}) });
+  if (error && colors.length && /colors/.test(error.message)) {
+    // The colors column (migration 0005) isn't there yet. Don't lose the request or the customer's
+    // choices: keep them in the message instead.
+    ({ data, error } = await insert({ ...base, message: `${r.message}\n\nColors chosen: ${colorsSummary(colors)}`.slice(0, 3000) }));
+  }
   check(error, "Saving the request");
   return fromRow(data as Row);
 }

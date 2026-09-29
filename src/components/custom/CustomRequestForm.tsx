@@ -5,6 +5,7 @@ import { useState, useTransition } from "react";
 import { submitRequest } from "@/app/(store)/custom/actions";
 import { parseLink } from "@/lib/requests";
 import { useHydrated } from "@/lib/useHydrated";
+import { ColorPicker } from "./ColorPicker";
 
 const steps = [
   { n: "1", title: "Send us the link", body: "Paste the page of the print you found, from MakerWorld or anywhere else.", color: "bg-sun" },
@@ -15,6 +16,7 @@ const steps = [
 export function CustomRequestForm() {
   const router = useRouter();
   const [link, setLink] = useState("");
+  const [colorIds, setColorIds] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const ready = useHydrated();
@@ -27,6 +29,7 @@ export function CustomRequestForm() {
     start(async () => {
       const res = await submitRequest({
         link,
+        colorIds,
         message: String(form.get("message") ?? ""),
         quantity: Number(form.get("quantity") ?? 1),
         name: String(form.get("name") ?? ""),
@@ -66,6 +69,7 @@ export function CustomRequestForm() {
               </span>
             )}
           </label>
+          <ColorPicker value={colorIds} onChange={setColorIds} />
           <label className="mt-4 block">
             <span className="admin-label">What would you like?</span>
             <textarea
@@ -74,7 +78,7 @@ export function CustomRequestForm() {
               rows={5}
               maxLength={3000}
               className="admin-input"
-              placeholder="Colors you want for each part, any size changes, when you need it, anything else…"
+              placeholder="Which color goes where, any size changes, when you need it, anything else…"
             />
           </label>
           <label className="mt-4 block max-w-40">
