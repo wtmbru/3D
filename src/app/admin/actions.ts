@@ -263,9 +263,20 @@ const productSchema = z.object({
 
 export type ProductInput = z.input<typeof productSchema>;
 
+/**
+ * The editor keeps every product as a list of options, even when there is only
+ * one. A single option is just a plain product, so fold it into the top-level
+ * fields before validating. (Its name is never shown, so it can be blank.)
+ */
+function flattenSingleOption(input: ProductInput): ProductInput {
+  if (input.variants?.length !== 1) return input;
+  const { basePrice, parts, presets, dimensions, layout } = input.variants[0];
+  return { ...input, basePrice, parts, presets, dimensions, layout: layout ?? input.layout, variants: [], variantLabel: undefined };
+}
+
 export async function saveProduct(input: ProductInput): Promise<ActionResult<{ id: string; slug: string }>> {
   return adminAction(async () => {
-    const parsed = productSchema.safeParse(input);
+    const parsed = productSchema.safeParse(flattenSingleOption(input));
     if (!parsed.success) return fail(parsed.error.issues[0]?.message ?? "Some fields aren't valid.");
     let p = parsed.data as Product;
 
@@ -315,7 +326,16 @@ export async function saveProduct(input: ProductInput): Promise<ActionResult<{ i
     if (clash) return fail(`Another product already uses the URL name "${p.slug}".`);
 
     const { data: before } = await db.from("products").select("*").eq("id", p.id).maybeSingle();
-    const { error } = await db.from("products").upsert(toProductRow(p));
+    const row: Record<string, unknown> = toProductRow(p);
+    // Plain products don't need the options columns, so they keep saving even if
+    // the 0002 database update hasn't been run yet (new rows can't tell; omit).
+    const usesOptions = (p.variants?.length ?? 0) > 0 || (p.addons?.length ?? 0) > 0 || !!p.variantLabel;
+    if (!usesOptions && !(before && "variants" in before)) {
+      delete row.variants;
+      delete row.variant_label;
+      delete row.addons;
+    }
+    const { error } = await db.from("products").upsert(row);
     if (error) {
       if (/variant|addons/.test(error.message)) {
         throw new Error("The database needs an update: run supabase/migrations/0002_product_options.sql in Supabase's SQL Editor.");
