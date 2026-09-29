@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ITEM_STATUSES, ORDER_STATUSES, PAYMENT_STATUSES, statusAfterItemChange } from "@/lib/orders";
 import { requireAdmin } from "@/lib/server/auth";
+import { sendTestNotification, type ChannelResult } from "@/lib/server/notify";
 import { deleteOrder, getOrderById, savePaymentSettings, setItemStatus, updateOrder } from "@/lib/server/orders";
 import type { ActionResult } from "./actions";
 
@@ -80,4 +81,14 @@ export async function savePayments(input: z.input<typeof paymentSettingsSchema>)
     if (!parsed.success) return fail("Those payment details look too long.");
     await savePaymentSettings(parsed.data);
   });
+}
+
+/** Sends a sample notification through every configured channel, so setup can be checked. */
+export async function sendTestNotifications(): Promise<ActionResult<{ results: ChannelResult[] }>> {
+  try {
+    await requireAdmin();
+  } catch {
+    return fail("Your session expired. Please sign in again.");
+  }
+  return { ok: true, results: await sendTestNotification() };
 }

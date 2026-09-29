@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { notificationStatus } from "@/lib/server/notify";
 import { getPaymentSettings } from "@/lib/server/orders";
+import { NotificationsCard } from "./NotificationsCard";
 import { SettingsForm } from "./SettingsForm";
 
 export const metadata: Metadata = { title: "Settings" };
@@ -13,6 +15,7 @@ export default async function SettingsPage() {
         don&apos;t accept it. Customers will then be told you&apos;ll message them the details.
       </p>
       <SettingsForm initial={await getPaymentSettings()} />
+      <NotificationsCard status={notificationStatus()} />
     </div>
   );
 }

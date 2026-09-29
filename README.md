@@ -88,7 +88,23 @@ Safety: the browser only sends *what* was designed. The server rebuilds every or
 
 Setup: run `supabase/migrations/0003_orders.sql` in Supabase's SQL Editor. Without Supabase, local development keeps orders in memory so the flow can be tried offline.
 
-Not built yet: notifications when an order is placed (email or text).
+### Order notifications
+
+When an order is placed the shop tells the owner, after the customer already has their confirmation:
+
+- **Email** (Resend, free): the customer, phone, email, payment method, every item with its filament colors, their note, and a button to open the order.
+- **Phone notification** (Pushover, about $5 one-time): a short alert that opens the order when tapped.
+
+Each turns on when its settings exist, and a failure never affects the order (it is logged with the order number). Set these in Vercel → Environment Variables, then redeploy:
+
+| Setting | Value |
+| --- | --- |
+| `RESEND_API_KEY`, `NOTIFY_EMAIL_TO` | Resend API key, and where to send alerts (comma-separate several). With the free shared sender this must be the email you signed up to Resend with. |
+| `PUSHOVER_APP_TOKEN`, `PUSHOVER_USER_KEY` | From pushover.net |
+| `NOTIFY_EMAIL_FROM` *(optional)* | Only once you've verified your own domain in Resend |
+| `SITE_URL` *(optional)* | Base for links in messages; defaults to the Vercel production URL |
+
+Admin → **Settings** shows what's switched on and has a **Send a test** button. Customer confirmation emails aren't sent (they need a domain of your own); the confirmation page and tracking link cover that for now. The code is in `src/lib/server/notify.ts`.
 
 ## Options and add-ons
 
@@ -118,6 +134,7 @@ Not built yet: notifications when an order is placed (email or text).
 - [x] Storefront + 3D color picker
 - [x] Admin panel: products, filaments, materials, photos
 - [x] Order requests with payment by Zelle / Venmo / Cash App, and an admin orders tracker
-- [ ] Notifications when an order is placed (email, and text or push)
+- [x] Notifications when an order is placed (email + phone push)
+- [ ] Confirmation emails to customers (needs your own domain)
 - [x] Bambu Studio .3mf import (parts, plates, painting)
 - [x] Product options (sizes, shapes) and add-ons

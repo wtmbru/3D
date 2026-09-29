@@ -1,11 +1,13 @@
 "use server";
 
 import { createHash } from "node:crypto";
+import { after } from "next/server";
 import { z } from "zod";
 import { FAMILIES } from "@/data/constants";
 import { MAX_QTY } from "@/lib/pricing";
 import { clientIp } from "@/lib/server/auth";
 import { getCatalog, getProducts } from "@/lib/server/catalog";
+import { notifyNewOrder } from "@/lib/server/notify";
 import { buildOrderItems, countRecentOrders, insertOrder } from "@/lib/server/orders";
 
 // Orders are public (no login), so the basics against abuse live here.
@@ -70,6 +72,8 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
       total: built.total,
       ipHash,
     });
+    // Tell her after the customer has their confirmation, so a slow email service never delays them.
+    after(() => notifyNewOrder(order));
     return { ok: true, id: order.id };
   } catch (e) {
     console.error(e);
