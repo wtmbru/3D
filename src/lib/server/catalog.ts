@@ -132,9 +132,23 @@ export function toFilamentRow(f: Filament) {
   };
 }
 
-function must<T>(res: { data: T | null; error: { message: string } | null }, what: string): T {
-  if (res.error) throw new Error(`Loading ${what} failed: ${res.error.message}`);
-  return res.data as T;
+/**
+ * Run a read query, retrying briefly on errors. A momentary hiccup on Supabase's
+ * side (seen once as "JWT issued at future", a clock blip) shouldn't fail a page
+ * or, worse, a deployment, since some pages read the catalog while being built.
+ */
+async function read<T>(
+  what: string,
+  query: () => PromiseLike<{ data: T | null; error: { message: string } | null }>,
+): Promise<T> {
+  let last = "";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await query();
+    if (!res.error) return res.data as T;
+    last = res.error.message;
+    await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+  }
+  throw new Error(`Loading ${what} failed: ${last}`);
 }
 
 /** Filaments + materials. Cached per request. */
@@ -142,21 +156,20 @@ export const getCatalog = cache(async (): Promise<Catalog> => {
   if (!isSupabaseConfigured()) return { filaments: seedFilaments, materials: seedMaterials };
   const db = supabaseAdmin();
   const [materials, filaments] = await Promise.all([
-    db.from("materials").select("*").order("sort"),
-    db.from("filaments").select("*").order("sort").order("created_at"),
+    read<MaterialRow[]>("materials", () => db.from("materials").select("*").order("sort")),
+    read<FilamentRow[]>("filaments", () => db.from("filaments").select("*").order("sort").order("created_at")),
   ]);
-  return {
-    materials: must<MaterialRow[]>(materials, "materials").map(toMaterial),
-    filaments: must<FilamentRow[]>(filaments, "filaments").map(toFilament),
-  };
+  return { materials: materials.map(toMaterial), filaments: filaments.map(toFilament) };
 });
 
 /** Products, including drafts only when asked (admin). Cached per request. */
 export const getProducts = cache(async (includeDrafts = false): Promise<Product[]> => {
   if (!isSupabaseConfigured()) return seedProducts.filter((p) => includeDrafts || p.published);
-  let q = supabaseAdmin().from("products").select("*").order("sort").order("created_at");
-  if (!includeDrafts) q = q.eq("published", true);
-  return must<ProductRow[]>(await q, "products").map(toProduct);
+  const rows = await read<ProductRow[]>("products", () => {
+    const q = supabaseAdmin().from("products").select("*").order("sort").order("created_at");
+    return includeDrafts ? q : q.eq("published", true);
+  });
+  return rows.map(toProduct);
 });
 
 export async function getProductBySlug(slug: string): Promise<Product | undefined> {
