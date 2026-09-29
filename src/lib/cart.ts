@@ -2,7 +2,11 @@
 
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { useSyncExternalStore } from "react";
+import { MAX_QTY } from "./pricing";
 import type { AddonSelection, ColorConfig, MaterialFamily } from "./types";
+
+export { MAX_QTY };
 
 export interface CartItem {
   /** Same product + option + material + colors + add-ons → same line. */
@@ -33,8 +37,6 @@ const stable = (r: Record<string, string> = {}) =>
 export function cartKey(item: Omit<CartItem, "key" | "qty">): string {
   return `${item.slug}|${item.variant ?? ""}|${item.family}|${stable(item.config)}|${stable(item.addons)}`;
 }
-
-export const MAX_QTY = 20;
 
 /**
  * Cart lives in localStorage for now. Prices aren't stored — they're
@@ -75,3 +77,12 @@ export const useCart = create<CartState>()(
 );
 
 export const useCartCount = () => useCart((s) => s.items.reduce((n, i) => n + i.qty, 0));
+
+/** False until the cart has been read from localStorage (avoids flashing an empty cart). */
+export function useCartHydrated() {
+  return useSyncExternalStore(
+    (cb) => useCart.persist.onFinishHydration(cb),
+    () => useCart.persist.hasHydrated(),
+    () => false,
+  );
+}

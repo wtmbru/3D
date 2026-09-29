@@ -1,39 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import { useSyncExternalStore } from "react";
 import { useCatalog } from "@/components/CatalogProvider";
 import { ProductThumb } from "@/components/ProductThumb";
 import { SwatchDot } from "@/components/Swatch";
-import { MAX_QTY, useCart, type CartItem } from "@/lib/cart";
+import { MAX_QTY, useCart, useCartHydrated, type CartItem } from "@/lib/cart";
+import { resolveCartLines } from "@/lib/cartLines";
 import { designHref } from "@/lib/config";
-import { formatPrice, getFilament, quote } from "@/lib/pricing";
+import { formatPrice, getFilament } from "@/lib/pricing";
 import type { Product } from "@/lib/types";
-import { describeAddons, findVariant, hasOptions, resolveVariant, variantsOf } from "@/lib/variants";
-
-function useHydrated() {
-  return useSyncExternalStore(
-    (cb) => useCart.persist.onFinishHydration(cb),
-    () => useCart.persist.hasHydrated(),
-    () => false,
-  );
-}
+import { describeAddons, findVariant, hasOptions } from "@/lib/variants";
 
 export function CartView({ products }: { products: Product[] }) {
   const catalog = useCatalog();
-  const hydrated = useHydrated();
+  const hydrated = useCartHydrated();
   const items = useCart((s) => s.items);
 
   // Drop lines whose product (or chosen option) was removed or unpublished.
-  const lines = items
-    .map((item) => {
-      const full = products.find((p) => p.slug === item.slug);
-      if (!full) return null;
-      if (item.variant && !variantsOf(full).some((v) => v.id === item.variant)) return null;
-      const product = resolveVariant(full, item.variant);
-      return { item, full, product, unit: quote(catalog, product, item.family, item.config, item.addons).unit };
-    })
-    .filter((l) => l !== null);
+  const lines = resolveCartLines(catalog, products, items);
 
   if (!hydrated) return <div className="mt-10 h-40 animate-pulse rounded-3xl bg-cream-deep" />;
 
@@ -71,19 +55,19 @@ export function CartView({ products }: { products: Product[] }) {
             <dd className="font-semibold tabular-nums">{formatPrice(subtotal)}</dd>
           </div>
           <div className="flex justify-between">
-            <dt className="text-ink-soft">Shipping</dt>
-            <dd className="text-ink-soft">Calculated at checkout</dd>
+            <dt className="text-ink-soft">Pickup / delivery</dt>
+            <dd className="text-ink-soft">Arranged after you order</dd>
           </div>
         </dl>
         <div className="mt-4 flex items-baseline justify-between border-t-2 border-dashed border-ink/20 pt-4">
           <span className="font-display text-lg font-bold">Total</span>
           <span className="font-display text-3xl font-extrabold tabular-nums">{formatPrice(subtotal)}</span>
         </div>
-        <button type="button" className="btn btn-primary mt-6 w-full" disabled>
-          Checkout coming soon
-        </button>
+        <Link href="/checkout" className="btn btn-primary mt-6 w-full">
+          Continue to checkout →
+        </Link>
         <p className="mt-3 text-center text-xs text-ink-soft">
-          Every item is printed to order and ships in a few days.
+          No payment online. You&apos;ll choose Zelle, Venmo or Cash App on the next step.
         </p>
       </aside>
     </div>

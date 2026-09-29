@@ -1,6 +1,9 @@
 import type { AddonSelection, Catalog, ColorConfig, Filament, MaterialFamily, Product } from "./types";
 import { addonLines, resolveVariant, variantsOf } from "./variants";
 
+/** Most of one design a customer can order at once. */
+export const MAX_QTY = 20;
+
 /** One AMS unit = 4 spools, so one print can use up to 4 filaments. */
 export const MAX_COLORS = 4;
 

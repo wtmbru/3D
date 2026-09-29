@@ -41,6 +41,7 @@ When deploying to Vercel, add the same four variables under **Settings → Envir
 | Store pages | `src/app/(store)/` |
 | Admin panel | `src/app/admin/` (server actions in `actions.ts`) |
 | Database reads | `src/lib/server/catalog.ts` |
+| Orders (storage, server-side pricing) | `src/lib/server/orders.ts` |
 | Admin auth | `src/lib/server/session.ts`, `auth.ts`, `src/proxy.ts` |
 | Pricing rules (4-color limit, per-color fee) | `src/lib/pricing.ts` |
 | 3D loading, materials per finish | `src/lib/three/models.ts` |
@@ -70,6 +71,25 @@ Choose whether customers recolor **each filament color** (best for painted model
 
 The importer lives in `src/lib/three/threemf.ts`. The paint decoding follows BambuStudio's `TriangleSelector`.
 
+## Orders (no online payment)
+
+Customers pay by **Zelle, Venmo or Cash App**, so there is no card checkout. The flow:
+
+1. The customer designs items, adds them to the cart and goes to **Checkout**: name, email, phone, payment method and an optional note. Nothing is charged.
+2. **Place order** saves it and shows a confirmation page (`/order/<id>`, an unguessable link) with the amount, where to send payment and a progress tracker. The customer can bookmark it.
+3. In the admin panel, **Orders** lists every order. The **Orders** tab shows a red count of new ones. Each order page has:
+   - **Payment**: Unpaid / Paid / Refunded
+   - **Progress**: New → Printing → Ready → Completed (or Cancel)
+   - **Print progress** for each item: Queued / Printing / Done. Starting a print moves the order to Printing, and finishing every item moves it to Ready.
+   - the exact filament for every part (and which print each is on), the customer's contact details, their note, and her own private notes
+4. **Settings** holds the Zelle / Venmo / Cash App details shown on confirmation pages. A blank one tells the customer she'll message them instead.
+
+Safety: the browser only sends *what* was designed. The server rebuilds every order from the live catalog, so prices can't be changed in the browser, locked colors can't be edited, and out-of-stock or unpublished items are refused. Each visitor is limited to 5 orders an hour, and there's a hidden trap field for bots. Orders are stored with the customer's contact details in a table only the server can read.
+
+Setup: run `supabase/migrations/0003_orders.sql` in Supabase's SQL Editor. Without Supabase, local development keeps orders in memory so the flow can be tried offline.
+
+Not built yet: notifications when an order is placed (email or text).
+
 ## Options and add-ons
 
 - **Options** (sizes, shapes, versions): each option has its own model, price, palettes and size. Customers pick one on the product page, colors carry over between options when part names match, and product cards show a badge like "4 sizes". Manage them in the product editor's **Options** card. The purple strip at the top shows which option you're editing.
@@ -97,7 +117,7 @@ The importer lives in `src/lib/three/threemf.ts`. The paint decoding follows Bam
 
 - [x] Storefront + 3D color picker
 - [x] Admin panel: products, filaments, materials, photos
-- [ ] Checkout with Stripe (recompute price server-side), order emails
-- [ ] Orders dashboard showing the exact filament per part
+- [x] Order requests with payment by Zelle / Venmo / Cash App, and an admin orders tracker
+- [ ] Notifications when an order is placed (email, and text or push)
 - [x] Bambu Studio .3mf import (parts, plates, painting)
 - [x] Product options (sizes, shapes) and add-ons

@@ -7,11 +7,13 @@ import { logout } from "../actions";
 
 const links = [
   { href: "/admin", label: "Dashboard", exact: true },
+  { href: "/admin/orders", label: "Orders" },
   { href: "/admin/products", label: "Products" },
   { href: "/admin/filaments", label: "Filaments" },
+  { href: "/admin/settings", label: "Settings" },
 ];
 
-export function AdminNav() {
+export function AdminNav({ newOrders = 0 }: { newOrders?: number }) {
   const pathname = usePathname();
   return (
     <header className="sticky top-0 z-40 border-b-2 border-ink bg-paper">
@@ -32,6 +34,14 @@ export function AdminNav() {
                 }`}
               >
                 {l.label}
+                {l.href === "/admin/orders" && newOrders > 0 && (
+                  <span
+                    className="ml-1.5 inline-grid min-w-5 place-items-center rounded-full bg-tomato px-1.5 text-xs font-extrabold text-paper"
+                    aria-label={`${newOrders} new`}
+                  >
+                    {newOrders}
+                  </span>
+                )}
               </Link>
             );
           })}
