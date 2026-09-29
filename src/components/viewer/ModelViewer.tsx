@@ -9,6 +9,7 @@ import { applyFilament, fitDistance, layoutProduct, loadProductGeometry, type Pr
 import { useCatalog } from "@/components/CatalogProvider";
 import { getFilament } from "@/lib/pricing";
 import type { ColorConfig, Filament, Product } from "@/lib/types";
+import { withPosition } from "@/lib/ui";
 
 interface ModelViewerProps {
   product: Product;
@@ -19,7 +20,7 @@ interface ModelViewerProps {
   autoRotate?: boolean;
   /** Let the customer zoom with scroll/pinch. Off for decorative viewers. */
   zoom?: boolean;
-  /** Must give the wrapper a size and a position (e.g. "absolute inset-0"). */
+  /** Sizes the wrapper (e.g. "absolute inset-0"). Gets `relative` unless it sets a position. */
   className?: string;
 }
 
@@ -45,7 +46,7 @@ export function ModelViewer({
   );
 
   return (
-    <div className={className ?? "relative"}>
+    <div className={withPosition(className)}>
       <Canvas
         dpr={[1, 2]}
         camera={{ fov: FOV, near: 1, far: 5000, position: [120, 100, 180] }}

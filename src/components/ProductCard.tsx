@@ -20,10 +20,11 @@ export async function ProductCard({ product, index = 0 }: { product: Product; in
       href={`/product/${product.slug}`}
       className="group chunky focus-ring block overflow-hidden rounded-[var(--radius-blob)] bg-paper transition-transform duration-200 hover:-translate-y-1 hover:rotate-[-0.6deg]"
     >
-      <div className={`layer-lines relative aspect-square border-b-2 border-ink ${tileColors[index % tileColors.length]}`}>
+      <div className={`layer-lines relative aspect-square overflow-hidden border-b-2 border-ink ${tileColors[index % tileColors.length]}`}>
         <ProductThumb
           product={product}
-          className="absolute inset-[8%] transition-transform duration-300 group-hover:scale-105"
+          className="absolute inset-0 transition-transform duration-300 group-hover:scale-105"
+          renderInset="inset-[8%]"
         />
         {product.badge && (
           <span className="chip absolute top-3 left-3 rotate-[-4deg] bg-sun text-xs shadow-[var(--shadow-pop-sm)]">

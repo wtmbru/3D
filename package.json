@@ -6,7 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint",
+    "lint": "eslint && node scripts/check-classnames.mjs",
     "seed": "tsx --env-file=.env.local scripts/seed.ts",
     "models": "tsx scripts/generate-sample-models.ts",
     "typecheck": "tsc --noEmit"
