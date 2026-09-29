@@ -119,6 +119,17 @@ Each turns on when its settings exist, and a failure never affects the order (it
 
 Admin → **Settings** shows what's switched on and has a **Send a test** button. Customer confirmation emails aren't sent (they need a domain of your own); the confirmation page and tracking link cover that for now. The code is in `src/lib/server/notify.ts`.
 
+## Custom print requests
+
+For prints a customer found elsewhere (usually MakerWorld). The app can't fetch models from a link (MakerWorld blocks automated access and downloads need a login), so this is a request-and-quote flow with a person in the loop:
+
+1. The customer opens **Custom print** (header, footer, and a card at the bottom of the shop) and sends the link, a message about colors and details, a quantity and their contact info. They get a private page, `/request/<id>`, that shows their request and later her price.
+2. In the admin panel, **Requests** (with a red count of new ones) lists them. Each request has the link (opens safely in a new tab, with a reminder to check the model's license before quoting), the message, and the customer's contact details.
+3. She types a **price** (per item) and an optional note, then saves the quote. It appears on the customer's page. **Copy message to send** writes a ready-made text or email with the price and their page link. Saving doesn't send anything by itself.
+4. She sets the status: New → Quoted → Accepted (or Declined, where her note is shown as the reason).
+
+Same protections as orders: links must be http(s) (things like `javascript:` are refused), a hidden trap field for bots, and 3 requests an hour per visitor. New requests also trigger the email and phone alerts if you've set those up. Setup: run `supabase/migrations/0004_custom_requests.sql`. Turning an accepted request into a tracked order isn't built yet.
+
 ## Order of products and the homepage spotlight
 
 In **Admin → Products**, drag a row (or use the ▲ ▼ arrows, which also work on phones) to change the order. It saves as you go and is the order customers see in the shop and in "Customer favorites" on the homepage. New products are added at the end.

@@ -15,6 +15,7 @@ export function Footer() {
           <ul className="mt-3 space-y-2 text-cream/80">
             <li><Link className="hover:text-cream" href="/shop">All products</Link></li>
             <li><Link className="hover:text-cream" href="/colors">Filament colors</Link></li>
+            <li><Link className="hover:text-cream" href="/custom">Custom print request</Link></li>
             <li><Link className="hover:text-cream" href="/cart">Cart</Link></li>
           </ul>
         </div>

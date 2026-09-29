@@ -41,6 +41,18 @@ export default async function ShopPage(props: PageProps<"/shop">) {
       {list.length === 0 && (
         <p className="mt-10 text-ink-soft">Nothing here yet. New designs are on the printer!</p>
       )}
+
+      <div className="chunky layer-lines mt-16 flex flex-wrap items-center justify-between gap-6 rounded-[var(--radius-blob)] bg-grape-soft p-6 sm:p-8">
+        <div className="max-w-xl">
+          <h2 className="font-display text-2xl font-extrabold">Don&apos;t see the one you want?</h2>
+          <p className="mt-2 text-ink-soft">
+            Found a print somewhere else? Send us the link and tell us your colors. We&apos;ll take a look and reply with a price.
+          </p>
+        </div>
+        <Link href="/custom" className="btn btn-primary">
+          Request a custom print →
+        </Link>
+      </div>
     </div>
   );
 }

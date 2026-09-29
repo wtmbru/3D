@@ -7,6 +7,7 @@ import { placeOrder } from "@/app/(store)/checkout/actions";
 import { useCatalog } from "@/components/CatalogProvider";
 import { SwatchDot } from "@/components/Swatch";
 import { useCart, useCartHydrated } from "@/lib/cart";
+import { useHydrated } from "@/lib/useHydrated";
 import { resolveCartLines } from "@/lib/cartLines";
 import { PAYMENT_METHODS, type PaymentMethod } from "@/lib/orders";
 import { formatPrice, getFilament } from "@/lib/pricing";
@@ -28,6 +29,7 @@ export function CheckoutForm({ products }: { products: Product[] }) {
   const [payment, setPayment] = useState<PaymentMethod | "">("");
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const ready = useHydrated();
 
   const lines = resolveCartLines(catalog, products, items);
   const total = lines.reduce((sum, l) => sum + l.unit * l.item.qty, 0);
@@ -78,7 +80,7 @@ export function CheckoutForm({ products }: { products: Product[] }) {
   }
 
   return (
-    <form onSubmit={submit} className="mt-10 grid items-start gap-8 lg:grid-cols-[1fr_380px]">
+    <form method="post" onSubmit={submit} className="mt-10 grid items-start gap-8 lg:grid-cols-[1fr_380px]">
       <div className="space-y-8">
         <section className="chunky rounded-[var(--radius-blob)] bg-paper p-6">
           <h2 className="font-display text-2xl font-extrabold">Your details</h2>
@@ -178,7 +180,7 @@ export function CheckoutForm({ products }: { products: Product[] }) {
             {error}
           </p>
         )}
-        <button type="submit" className="btn btn-primary mt-5 w-full" disabled={pending}>
+        <button type="submit" className="btn btn-primary mt-5 w-full" disabled={pending || !ready}>
           {pending ? "Placing your order…" : `Place order · ${formatPrice(total)}`}
         </button>
         <Link href="/cart" className="mt-3 block text-center text-sm font-semibold underline decoration-2 underline-offset-4">

@@ -1,32 +1,12 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { ITEM_STATUSES, ORDER_STATUSES, PAYMENT_STATUSES, statusAfterItemChange } from "@/lib/orders";
 import { requireAdmin } from "@/lib/server/auth";
+import { fail, run } from "@/lib/server/admin-run";
 import { sendTestNotification, type ChannelResult } from "@/lib/server/notify";
 import { deleteOrder, getOrderById, savePaymentSettings, setItemStatus, updateOrder } from "@/lib/server/orders";
 import type { ActionResult } from "./actions";
-
-const fail = (error: string) => ({ ok: false as const, error });
-
-/** Admin-only wrapper: checks the session, turns errors into friendly messages, refreshes the admin pages. */
-async function run(fn: () => Promise<ActionResult | void>): Promise<ActionResult> {
-  try {
-    await requireAdmin();
-  } catch {
-    return fail("Your session expired. Please sign in again.");
-  }
-  try {
-    const res = await fn();
-    if (res && !res.ok) return res;
-    revalidatePath("/admin", "layout");
-    return { ok: true };
-  } catch (e) {
-    console.error(e);
-    return fail(e instanceof Error ? e.message : "Something went wrong.");
-  }
-}
 
 const idSchema = z.string().uuid();
 const statusSchema = z.enum(ORDER_STATUSES.map((s) => s.id) as [string, ...string[]]);

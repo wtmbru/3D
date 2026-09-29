@@ -312,6 +312,7 @@ function MaterialCard({ material }: { material: MaterialInfo }) {
 
   return (
     <form
+      method="post"
       className="admin-card space-y-3"
       onSubmit={(e) => {
         e.preventDefault();

@@ -1,6 +1,7 @@
 import "server-only";
 import { site } from "@/config/site";
 import { orderLabel, paymentLabel, type Order } from "@/lib/orders";
+import { linkHost, requestLabel, type CustomRequest } from "@/lib/requests";
 import { formatPrice } from "@/lib/pricing";
 
 /*
@@ -118,6 +119,52 @@ ${adminUrl ? `<p style="margin:22px 0 0"><a href="${esc(adminUrl)}" style="displ
   return { subject, text, html, push };
 }
 
+/** Same shape as an order message, so the same email and phone senders work for it. */
+export function requestMessage(r: CustomRequest): ReturnType<typeof orderMessage> {
+  const base = siteUrl();
+  const adminUrl = base ? `${base}/admin/requests/${r.id}` : undefined;
+  const host = linkHost(r.modelUrl);
+  const subject = `New custom print request ${requestLabel(r.number)} · ${oneLine(r.name)} · ${host}`;
+  const message = r.message.length > 600 ? `${r.message.slice(0, 600)}…` : r.message;
+
+  const text = [
+    `${site.name}: new custom print request ${requestLabel(r.number)}`,
+    ``,
+    `${r.name}`,
+    `Phone: ${r.phone}`,
+    `Email: ${r.email}`,
+    ``,
+    `Model (${host}): ${r.modelUrl}`,
+    `Quantity: ${r.quantity}`,
+    ``,
+    `Their message:`,
+    // Quoted line by line so nothing in it can pass for one of our own lines.
+    ...message.split(/\r?\n/).map((l) => `  > ${l}`),
+    ...(adminUrl ? [``, `Review it and send a price: ${adminUrl}`] : []),
+  ].join("\n");
+
+  const html = `<!doctype html><html><body style="margin:0;padding:24px;background:#fff6ea;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f1640">
+<div style="max-width:560px;margin:0 auto;background:#fff;border:2px solid #1f1640;border-radius:20px;padding:24px">
+<p style="margin:0;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#5b527a">${esc(site.name)}</p>
+<h1 style="margin:6px 0 0;font-size:26px">Custom print request ${esc(requestLabel(r.number))}</h1>
+<hr style="border:none;border-top:2px dashed #e5dcc9;margin:18px 0">
+<p style="margin:0;font-size:17px;font-weight:700">${esc(r.name)}</p>
+<p style="margin:4px 0 0"><a href="tel:${esc(r.phone.replace(/[^\d+]/g, ""))}" style="color:#1f1640">${esc(r.phone)}</a><br><a href="mailto:${esc(r.email)}" style="color:#1f1640">${esc(r.email)}</a></p>
+<hr style="border:none;border-top:2px dashed #e5dcc9;margin:18px 0">
+<p style="margin:0"><strong>Model:</strong> <a href="${esc(r.modelUrl)}" style="color:#1f1640">${esc(r.modelUrl.length > 80 ? `${r.modelUrl.slice(0, 80)}…` : r.modelUrl)}</a> <span style="color:#5b527a">(${esc(host)})</span></p>
+<p style="margin:6px 0 0"><strong>Quantity:</strong> ${r.quantity}</p>
+<p style="margin:16px 0 0;padding:12px 14px;background:#fff0c2;border-radius:12px;white-space:pre-wrap">${esc(message)}</p>
+${adminUrl ? `<p style="margin:22px 0 0"><a href="${esc(adminUrl)}" style="display:inline-block;background:#ff5e3a;color:#fff;font-weight:700;text-decoration:none;padding:12px 22px;border-radius:999px;border:2px solid #1f1640">Review and send a price</a></p>` : ""}
+</div></body></html>`;
+
+  const push = {
+    title: `Custom request ${requestLabel(r.number)}`.slice(0, 250),
+    message: `${oneLine(r.name)} · ${host}\n${oneLine(r.message)}`.slice(0, 1000),
+    url: adminUrl,
+  };
+  return { subject, text, html, push };
+}
+
 // ── Sending ──────────────────────────────────────────────────────────────────
 
 async function post(url: string, init: RequestInit): Promise<{ ok: boolean; status: number; body: unknown }> {
@@ -172,6 +219,16 @@ export async function notifyNewOrder(order: Order): Promise<ChannelResult[]> {
   const results = await Promise.all([sendEmail(msg), sendPush(msg)]);
   for (const r of results) {
     if (r.status === "failed") console.error(`Order ${orderLabel(order.number)}: ${r.channel} notification failed: ${r.detail}`);
+  }
+  return results;
+}
+
+/** Tells the shop owner about a new custom print request. Never throws. */
+export async function notifyNewRequest(r: CustomRequest): Promise<ChannelResult[]> {
+  const msg = requestMessage(r);
+  const results = await Promise.all([sendEmail(msg), sendPush(msg)]);
+  for (const res of results) {
+    if (res.status === "failed") console.error(`Request ${requestLabel(r.number)}: ${res.channel} notification failed: ${res.detail}`);
   }
   return results;
 }

@@ -20,6 +20,7 @@ export function SettingsForm({ initial }: { initial: PaymentSettings }) {
 
   return (
     <form
+      method="post"
       className="admin-card mt-8 max-w-2xl space-y-5"
       onSubmit={(e) => {
         e.preventDefault();
