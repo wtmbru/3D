@@ -512,8 +512,9 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
             <div>
               <h2 className="admin-h2">Arrange pieces</h2>
               <p className="text-sm text-ink-soft">
-                Click a piece, then drag the arrows to move it or switch to Rotate. Pieces printed flat usually
-                need a 90° turn first. Everything is saved with the product.
+                Click a piece, then drag the arrows to move it or switch to Rotate. For exact placement, type
+                values into the Position and Rotation boxes. Set Turn snap to Free for smooth turning. Pieces
+                printed flat usually need a 90° turn first.
               </p>
             </div>
             <button type="button" className="btn btn-primary btn-sm" onClick={() => setArranging(false)}>

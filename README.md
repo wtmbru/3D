@@ -80,7 +80,7 @@ The importer lives in `src/lib/three/threemf.ts`. The paint decoding follows Bam
 ## Pieces printed separately
 
 - **Prints:** give each part a print number. Parts that print together share one AMS, so the 4-color limit and the extra-color fee apply per print. A glued-on hat can be "Print 2" with its own 4 colors.
-- **Arrange pieces:** separate prints are usually exported flat at the origin, so they pile up. Click **Arrange pieces** in the product editor, then **Spread out**, then click each piece and move or rotate it into place. The ↻ buttons turn a piece 90°, and **Drop to floor** rests it on the ground. Placements are saved with the product, and customers see the assembled model.
+- **Arrange pieces:** separate prints are usually exported flat at the origin, so they pile up. Click **Arrange pieces** in the product editor, then **Spread out**, then click each piece and move or rotate it into place. The ↻ buttons turn a piece 90°, and **Drop to floor** rests it on the ground. For fine tuning, type exact **Position** (mm) and **Rotation** (°) values for the selected piece, or nudge them with −/+ or the ↑ ↓ keys (hold Shift for 10× steps). **Move snap** and **Turn snap** choose the drag step; set either to **Free** for smooth, unsnapped dragging. Placements are saved with the product, and customers see the assembled model.
 - **Kits and sets:** set **Show pieces → Laid out side by side** to display the pieces next to each other instead.
 
 ## How pricing works

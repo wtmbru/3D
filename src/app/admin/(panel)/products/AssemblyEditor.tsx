@@ -40,11 +40,35 @@ interface Props {
 
 const FOV = 35;
 const round = (n: number, step: number) => Math.round(n / step) * step;
+const deg = THREE.MathUtils.radToDeg;
+const rad = THREE.MathUtils.degToRad;
+/** Show at most 2 decimals, without trailing zeros. */
+const tidy = (n: number) => Number(n.toFixed(2));
+
+/** Snap steps; null = free. Free lets the gizmo move/turn continuously. */
+const MOVE_SNAPS: { value: number | null; label: string }[] = [
+  { value: null, label: "Free" },
+  { value: 0.1, label: "0.1 mm" },
+  { value: 0.5, label: "0.5 mm" },
+  { value: 1, label: "1 mm" },
+  { value: 5, label: "5 mm" },
+];
+const TURN_SNAPS: { value: number | null; label: string }[] = [
+  { value: null, label: "Free" },
+  { value: 1, label: "1°" },
+  { value: 5, label: "5°" },
+  { value: 15, label: "15°" },
+  { value: 45, label: "45°" },
+];
+
+type V3 = [number, number, number];
+const IDENTITY: PartTransform = { position: [0, 0, 0], rotation: [0, 0, 0] };
 
 export function AssemblyEditor({ product, config, selected, onSelect, onTransforms }: Props) {
   const [geometry, setGeometry] = useState<ProductGeometry | null>(null);
   const [mode, setMode] = useState<Mode>("translate");
-  const [snap, setSnap] = useState(true);
+  const [moveSnap, setMoveSnap] = useState<number | null>(1);
+  const [turnSnap, setTurnSnap] = useState<number | null>(15);
   const [frameTick, setFrameTick] = useState(0);
   // Clicking empty space deselects — but not when that "click" ends a gizmo drag or an orbit.
   const gizmoBusy = useRef(false);
@@ -73,6 +97,15 @@ export function AssemblyEditor({ product, config, selected, onSelect, onTransfor
 
   function update(partId: string, t: PartTransform | undefined) {
     onTransforms({ [partId]: t });
+  }
+
+  /** Set one axis of the selected piece exactly (position in mm, rotation in degrees). */
+  function setAxis(kind: "position" | "rotation", axis: 0 | 1 | 2, value: number) {
+    if (!selectedPart || !Number.isFinite(value)) return;
+    const t = selectedPart.transform ?? IDENTITY;
+    const next = [...t[kind]] as V3;
+    next[axis] = kind === "rotation" ? rad(value) : value;
+    update(selectedPart.id, { ...t, [kind]: next });
   }
 
   function rotate90(axis: "x" | "y" | "z") {
@@ -143,16 +176,36 @@ export function AssemblyEditor({ product, config, selected, onSelect, onTransfor
           Reset piece
         </ToolButton>
         <span className="flex-1" />
-        <label className="flex items-center gap-1.5 px-1 font-semibold">
-          <input type="checkbox" checked={snap} onChange={(e) => setSnap(e.target.checked)} />
-          Snap
-        </label>
+        <SnapSelect label="Move snap" options={MOVE_SNAPS} value={moveSnap} onChange={setMoveSnap} />
+        <SnapSelect label="Turn snap" options={TURN_SNAPS} value={turnSnap} onChange={setTurnSnap} />
         <ToolButton onClick={spreadAll} title="Lay every piece out side by side">
           Spread out
         </ToolButton>
         <ToolButton onClick={() => setFrameTick((n) => n + 1)} title="Fit everything in view">
           Fit view
         </ToolButton>
+      </div>
+
+      <div className="flex min-h-11 flex-wrap items-center gap-x-5 gap-y-1 border-b-2 border-ink bg-cream px-3 py-1.5 text-sm">
+        {selectedPart ? (
+          <>
+            <AxisGroup
+              title="Position (mm)"
+              step={moveSnap ?? 0.1}
+              values={(selectedPart.transform ?? IDENTITY).position}
+              onChange={(axis, v) => setAxis("position", axis, v)}
+            />
+            <AxisGroup
+              title="Rotation (°)"
+              step={turnSnap ?? 1}
+              values={(selectedPart.transform ?? IDENTITY).rotation.map(deg) as V3}
+              onChange={(axis, v) => setAxis("rotation", axis, v)}
+            />
+            <span className="hidden text-xs text-ink-soft lg:inline">Type a value or use ↑ ↓. Shift = 10× bigger steps.</span>
+          </>
+        ) : (
+          <span className="text-ink-soft">Select a piece to set its exact position and rotation.</span>
+        )}
       </div>
 
       <div className="relative min-h-0 flex-1 bg-sky-soft">
@@ -191,7 +244,8 @@ export function AssemblyEditor({ product, config, selected, onSelect, onTransfor
                   filamentId={config[part.id] ?? part.defaultFilament}
                   selected={part.id === selected}
                   mode={mode}
-                  snap={snap}
+                  moveSnap={moveSnap}
+                  turnSnap={turnSnap}
                   onSelect={() => onSelect(part.id)}
                   onCommit={(t) => update(part.id, t)}
                   onDragStart={() => (gizmoBusy.current = true)}
@@ -209,6 +263,132 @@ export function AssemblyEditor({ product, config, selected, onSelect, onTransfor
         </p>
       </div>
     </div>
+  );
+}
+
+function SnapSelect({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { value: number | null; label: string }[];
+  value: number | null;
+  onChange: (v: number | null) => void;
+}) {
+  return (
+    <label className="flex items-center gap-1 font-semibold">
+      <span className="text-ink-soft">{label}</span>
+      <select
+        className="rounded-full border-2 border-ink/20 bg-paper px-2 py-1 font-semibold outline-none focus:border-ink"
+        value={value === null ? "free" : String(value)}
+        onChange={(e) => onChange(e.target.value === "free" ? null : Number(e.target.value))}
+      >
+        {options.map((o) => (
+          <option key={o.label} value={o.value === null ? "free" : String(o.value)}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+const AXES = [
+  { name: "X", color: "text-tomato", hint: "red" },
+  { name: "Y", color: "text-mint", hint: "green, up" },
+  { name: "Z", color: "text-sky", hint: "blue" },
+] as const;
+
+function AxisGroup({
+  title,
+  step,
+  values,
+  onChange,
+}: {
+  title: string;
+  step: number;
+  values: V3;
+  onChange: (axis: 0 | 1 | 2, value: number) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+      <span className="font-bold">{title}</span>
+      {AXES.map((a, i) => (
+        <NumField
+          key={a.name}
+          label={a.name}
+          labelClass={a.color}
+          title={`${a.name} axis (${a.hint})`}
+          value={values[i]}
+          step={step}
+          onChange={(v) => onChange(i as 0 | 1 | 2, v)}
+        />
+      ))}
+    </div>
+  );
+}
+
+/** Number box with −/+ nudge buttons. Accepts partial typing ("-", "1.") without fighting the user. */
+function NumField({
+  label,
+  labelClass,
+  title,
+  value,
+  step,
+  onChange,
+}: {
+  label: string;
+  labelClass: string;
+  title: string;
+  value: number;
+  step: number;
+  onChange: (v: number) => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+  const nudge = (dir: 1 | -1, big: boolean) => {
+    setDraft(null);
+    onChange(tidy(value + dir * step * (big ? 10 : 1)));
+  };
+  return (
+    <span className="flex items-center gap-0.5" title={title}>
+      <span className={`w-3.5 text-center font-extrabold ${labelClass}`}>{label}</span>
+      <button
+        type="button"
+        aria-label={`Decrease ${label}`}
+        onClick={(e) => nudge(-1, e.shiftKey)}
+        className="h-7 w-6 rounded-full border-2 border-ink/20 leading-none font-bold hover:border-ink"
+      >
+        −
+      </button>
+      <input
+        inputMode="decimal"
+        aria-label={`${title}`}
+        className="h-7 w-16 rounded-lg border-2 border-ink/20 bg-paper px-1 text-center tabular-nums outline-none focus:border-ink"
+        value={draft ?? String(tidy(value))}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          const n = parseFloat(e.target.value);
+          if (Number.isFinite(n)) onChange(n);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+            e.preventDefault();
+            nudge(e.key === "ArrowUp" ? 1 : -1, e.shiftKey);
+          }
+        }}
+        onBlur={() => setDraft(null)}
+      />
+      <button
+        type="button"
+        aria-label={`Increase ${label}`}
+        onClick={(e) => nudge(1, e.shiftKey)}
+        className="h-7 w-6 rounded-full border-2 border-ink/20 leading-none font-bold hover:border-ink"
+      >
+        +
+      </button>
+    </span>
   );
 }
 
@@ -249,7 +429,8 @@ function Piece({
   filamentId,
   selected,
   mode,
-  snap,
+  moveSnap,
+  turnSnap,
   onSelect,
   onCommit,
   onDragStart,
@@ -261,7 +442,8 @@ function Piece({
   filamentId: string;
   selected: boolean;
   mode: Mode;
-  snap: boolean;
+  moveSnap: number | null;
+  turnSnap: number | null;
   onSelect: () => void;
   onCommit: (t: PartTransform) => void;
   onDragStart: () => void;
@@ -298,7 +480,7 @@ function Piece({
   function commit() {
     const g = obj;
     if (!g) return;
-    const step = snap ? 0.5 : 0.01;
+    const step = moveSnap ? Math.min(moveSnap, 0.5) : 0.01;
     onCommit({
       position: [round(g.position.x - center.x, step), round(g.position.y - center.y, step), round(g.position.z - center.z, step)],
       rotation: [g.rotation.x, g.rotation.y, g.rotation.z].map((r) => round(r, 1e-4)) as PartTransform["rotation"],
@@ -325,8 +507,8 @@ function Piece({
           object={obj}
           mode={mode}
           size={1.25}
-          translationSnap={snap ? 1 : null}
-          rotationSnap={snap ? THREE.MathUtils.degToRad(15) : null}
+          translationSnap={moveSnap}
+          rotationSnap={turnSnap === null ? null : rad(turnSnap)}
           onMouseDown={onDragStart}
           onMouseUp={() => {
             commit();
