@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { useCatalog } from "@/components/CatalogProvider";
 import { ModelViewer } from "@/components/viewer/ModelViewer";
-import { categories, FAMILIES } from "@/data/constants";
+import { categories, FAMILIES, MAX_PHOTOS } from "@/data/constants";
 import { remapToFamily } from "@/lib/config";
 import { colorsByPlate, defaultConfig, distinctFilaments, formatPrice, MAX_COLORS, plateOf, quote } from "@/lib/pricing";
 import { aliasModelFile, layoutProduct, loadProductGeometry } from "@/lib/three/models";
@@ -18,6 +18,7 @@ import { measure as measureGroups, type ImportGroup } from "./from3mf";
 import { Import3mfDialog, type ImportResult } from "./Import3mfDialog";
 import { deleteProduct, saveProduct } from "../../actions";
 import { Notice, Switch, useNotice } from "../ui";
+import { imagesFromPaste, isPlainTextPaste, readClipboardImages, type PastedImages } from "./clipboard";
 import { ColorSelect } from "./ColorSelect";
 import { nameFromFile, readStl, slugify, uploadFile } from "./upload";
 
@@ -403,6 +404,16 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
   // ── Photos ─────────────────────────────────────────────────────────────────
 
   async function addPhotos(files: File[]) {
+    // Count photos already saved plus ones still uploading, so the limit can't be slipped past.
+    const inFlight = uploads.filter((u) => u.kind === "photo" && !u.error).length;
+    const room = MAX_PHOTOS - (p.photos?.length ?? 0) - inFlight;
+    if (files.length > room) {
+      setNotice({
+        kind: "error",
+        text: room > 0 ? `A product can have up to ${MAX_PHOTOS} photos, so only the first ${room} were added.` : `This product already has the maximum of ${MAX_PHOTOS} photos.`,
+      });
+      files = files.slice(0, Math.max(0, room));
+    }
     for (const file of files) {
       const key = `${file.name}-${Math.random()}`;
       setUploads((u) => [...u, { key, kind: "photo", name: file.name, progress: 0 }]);
@@ -415,6 +426,44 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
       } catch (e) {
         setUploads((u) => u.map((x) => (x.key === key ? { ...x, error: e instanceof Error ? e.message : "Upload failed" } : x)));
       }
+    }
+  }
+
+  /** Photos from the clipboard (Cmd/Ctrl+V or the button). */
+  function addClipboardImages({ files, skipped }: PastedImages) {
+    if (files.length === 0) {
+      setNotice({
+        kind: "error",
+        text: skipped ? "That image type isn't supported. Use a JPG, PNG or WebP." : "There's no image on the clipboard. Copy a picture or take a screenshot first.",
+      });
+      return;
+    }
+    document.getElementById("photos")?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (skipped) setNotice({ kind: "error", text: `${skipped} pasted ${skipped === 1 ? "image was" : "images were"} skipped (only JPG, PNG and WebP work).` });
+    void addPhotos(files);
+  }
+
+  // Paste anywhere on the page. The listener is added once; the ref keeps it pointed at the latest handler.
+  const pasteHandler = useRef(addClipboardImages);
+  useEffect(() => {
+    pasteHandler.current = addClipboardImages;
+  });
+  useEffect(() => {
+    const onPaste = (e: ClipboardEvent) => {
+      const pasted = imagesFromPaste(e.clipboardData);
+      if (pasted.files.length + pasted.skipped === 0 || isPlainTextPaste(e)) return;
+      e.preventDefault();
+      pasteHandler.current(pasted);
+    };
+    document.addEventListener("paste", onPaste);
+    return () => document.removeEventListener("paste", onPaste);
+  }, []);
+
+  async function pasteFromButton() {
+    try {
+      addClipboardImages(await readClipboardImages());
+    } catch (e) {
+      setNotice({ kind: "error", text: e instanceof Error ? e.message : "Couldn't read the clipboard." });
     }
   }
 
@@ -1019,10 +1068,18 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
             </section>
           )}
 
-          <section className="admin-card space-y-4">
-            <h2 className="admin-h2">Photos</h2>
+          <section id="photos" className="admin-card scroll-mt-24 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="admin-h2">
+                Photos <span className="font-sans text-base font-semibold text-ink-soft">{p.photos?.length ?? 0}/{MAX_PHOTOS}</span>
+              </h2>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={pasteFromButton}>
+                Paste image
+              </button>
+            </div>
             <p className="text-sm text-ink-soft">
               Real photos of the print. The first one is used on product cards. Without photos, cards show the 3D model.
+              You can also copy an image (or take a screenshot) and press <strong>⌘V</strong> / <strong>Ctrl+V</strong> anywhere on this page.
             </p>
             {(p.photos?.length ?? 0) > 0 && (
               <ul className="grid grid-cols-3 gap-3 sm:grid-cols-4">
@@ -1045,7 +1102,7 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
                 ))}
               </ul>
             )}
-            <DropZone accept=".jpg,.jpeg,.png,.webp" label="Drop photos here, or click to choose" hint="JPG, PNG or WebP." onFiles={addPhotos} />
+            <DropZone accept=".jpg,.jpeg,.png,.webp" label="Drop photos here, click to choose, or paste" hint="JPG, PNG or WebP." onFiles={addPhotos} />
             <UploadList uploads={uploads.filter((u) => u.kind === "photo")} onDismiss={(key) => setUploads((u) => u.filter((x) => x.key !== key))} />
           </section>
 

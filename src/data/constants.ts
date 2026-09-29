@@ -1,5 +1,8 @@
 import type { Category, Finish, MaterialFamily } from "@/lib/types";
 
+/** Most photos one product can have. */
+export const MAX_PHOTOS = 12;
+
 export const FAMILIES: MaterialFamily[] = ["PLA", "PETG", "TPU"];
 
 export const FINISHES: Finish[] = ["basic", "matte", "silk", "translucent", "sparkle"];

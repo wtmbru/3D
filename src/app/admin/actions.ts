@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { categories, FAMILIES, FINISHES } from "@/data/constants";
+import { categories, FAMILIES, FINISHES, MAX_PHOTOS } from "@/data/constants";
 import { MAX_COLORS, platesOverLimit } from "@/lib/pricing";
 import { clientIp, isThrottled, recordAttempt, requireAdmin } from "@/lib/server/auth";
 import { getCatalog, getProducts, toFilamentRow, toProductRow } from "@/lib/server/catalog";
@@ -248,7 +248,7 @@ const productSchema = z.object({
   materials: z.array(z.enum(FAMILIES)).min(1, "Pick at least one material"),
   parts: z.array(partSchema).min(1, "Upload at least one STL"),
   presets: presetsSchema,
-  photos: z.array(z.string().url()).max(12).default([]),
+  photos: z.array(z.string().url()).max(MAX_PHOTOS, `A product can have up to ${MAX_PHOTOS} photos.`).default([]),
   dimensions: dimensionsSchema,
   leadTimeDays: z.coerce.number().int().min(0).max(90),
   upAxis: z.enum(["z", "y"]).default("z"),

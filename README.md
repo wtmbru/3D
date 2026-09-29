@@ -78,6 +78,8 @@ That cuts out the background and regenerates the header icon, the browser tab an
 
 Choose whether customers recolor **each filament color** (best for painted models) or **each part separately**, then name the parts, set the price, and publish. Modifier, negative and support parts are skipped. When a plate holds several copies of an object, one copy is imported. OrcaSlicer and PrusaSlicer projects work too.
 
+**Photos:** in a product's Photos section you can drop files, click to choose, or **paste**. Copy an image (a screenshot, "Copy image" on a web page, a picture from Preview or Photos) and press ⌘V / Ctrl+V anywhere on the page, or click **Paste image**. Up to 12 per product; the first is the cover. A text paste into a text box is never hijacked, even when the clipboard also holds a picture (as from Excel).
+
 **Or use STLs:** export one STL per color region from Bambu Studio (keep Z-up) and drop them all in. They show in the preview immediately and upload in the background.
 
 The importer lives in `src/lib/three/threemf.ts`. The paint decoding follows BambuStudio's `TriangleSelector`.
