@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { CustomRequestForm } from "@/components/custom/CustomRequestForm";
 import { pageMeta } from "@/lib/meta";
+import { getDeliverySettings } from "@/lib/server/settings";
 
 export const metadata: Metadata = pageMeta(
   "Custom print",
@@ -8,7 +9,7 @@ export const metadata: Metadata = pageMeta(
   "/custom",
 );
 
-export default function CustomPage() {
+export default async function CustomPage() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-12 sm:px-6">
       <p className="eyebrow">Custom print</p>
@@ -17,7 +18,7 @@ export default function CustomPage() {
         Send us the link and tell us how you&apos;d like it: colors, size, how many. We&apos;ll take a look and reply with a
         price. There&apos;s nothing to pay until you say yes.
       </p>
-      <CustomRequestForm />
+      <CustomRequestForm delivery={await getDeliverySettings()} />
     </div>
   );
 }

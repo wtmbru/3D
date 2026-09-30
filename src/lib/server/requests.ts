@@ -1,6 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { likeLiteral } from "@/lib/lookup";
+import type { DeliveryMethod } from "@/lib/delivery";
 import { colorsSummary, type CustomRequest, type RequestColor, type RequestStatus } from "@/lib/requests";
 import { nextMemoryNumber } from "./orders";
 import { isSupabaseConfigured, supabaseAdmin } from "./supabase";
@@ -21,6 +22,7 @@ type Row = {
   message: string;
   quantity: number;
   colors?: RequestColor[]; // absent until migration 0005 has been run
+  delivery?: DeliveryMethod; // absent until migration 0009 has been run
   order_id?: string | null; // absent until migration 0006 has been run
   status: RequestStatus;
   quote_price: string | number | null;
@@ -40,6 +42,7 @@ const fromRow = (r: Row): CustomRequest => ({
   message: r.message,
   quantity: r.quantity,
   colors: r.colors ?? [],
+  delivery: r.delivery ?? "pickup",
   ...(r.order_id ? { orderId: r.order_id } : {}),
   status: r.status,
   ...(r.quote_price !== null ? { quotePrice: Number(r.quote_price) } : {}),
@@ -56,6 +59,7 @@ export interface NewRequest {
   message: string;
   quantity: number;
   colors?: RequestColor[];
+  delivery?: DeliveryMethod;
   ipHash?: string;
 }
 
@@ -98,6 +102,7 @@ export async function insertRequest(r: NewRequest): Promise<CustomRequest> {
       message: r.message,
       quantity: r.quantity,
       colors: r.colors ?? [],
+      delivery: r.delivery ?? "pickup",
       status: "new",
       ipHash: r.ipHash,
     };
@@ -114,11 +119,18 @@ export async function insertRequest(r: NewRequest): Promise<CustomRequest> {
   };
   const colors = r.colors ?? [];
   const insert = (row: object) => supabaseAdmin().from("custom_requests").insert(row).select("*").single();
-  let { data, error } = await insert({ ...base, message: r.message, ...(colors.length ? { colors } : {}) });
-  if (error && colors.length && /colors/.test(error.message)) {
-    // The colors column (migration 0005) isn't there yet. Don't lose the request or the customer's
-    // choices: keep them in the message instead.
-    ({ data, error } = await insert({ ...base, message: `${r.message}\n\nColors chosen: ${colorsSummary(colors)}`.slice(0, 3000) }));
+  const shipping = r.delivery === "shipping";
+  let { data, error } = await insert({
+    ...base,
+    message: r.message,
+    ...(colors.length ? { colors } : {}),
+    ...(shipping ? { delivery: "shipping" } : {}),
+  });
+  if (error && (colors.length || shipping) && /colors|delivery/.test(error.message)) {
+    // A newer column (migration 0005 or 0009) isn't there yet. Don't lose the request or the
+    // customer's choices: keep them in the message instead.
+    const notes = [colors.length ? `Colors chosen: ${colorsSummary(colors)}` : "", shipping ? "Delivery: they'd like it shipped" : ""].filter(Boolean);
+    ({ data, error } = await insert({ ...base, message: `${r.message}\n\n${notes.join("\n")}`.slice(0, 3000) }));
   }
   check(error, "Saving the request");
   return fromRow(data as Row);

@@ -126,6 +126,11 @@ export function RequestDetail({ request }: { request: CustomRequest }) {
             <p className="mt-3 text-sm">
               <span className="font-semibold text-ink-soft">Quantity:</span> <strong>{request.quantity}</strong>
             </p>
+            <p className="mt-1 text-sm">
+              <span className="font-semibold text-ink-soft">Delivery:</span>{" "}
+              <strong>{request.delivery === "shipping" ? "Wants shipping 📦" : "Local pickup"}</strong>
+              {request.delivery === "shipping" && <span className="text-ink-soft"> (the shipping fee from Settings is added when they accept)</span>}
+            </p>
           </section>
 
           <section className="admin-card" aria-label="Customer">

@@ -141,6 +141,7 @@ export function requestMessage(r: CustomRequest): ReturnType<typeof orderMessage
     ``,
     `Model (${host}): ${r.modelUrl}`,
     `Quantity: ${r.quantity}`,
+    `Delivery: ${r.delivery === "shipping" ? "wants shipping" : "local pickup"}`,
     ...(colors ? [`Colors picked: ${colors}`] : []),
     ``,
     `Their message:`,
@@ -159,6 +160,7 @@ export function requestMessage(r: CustomRequest): ReturnType<typeof orderMessage
 <hr style="border:none;border-top:2px dashed #e5dcc9;margin:18px 0">
 <p style="margin:0"><strong>Model:</strong> <a href="${esc(r.modelUrl)}" style="color:#1f1640">${esc(r.modelUrl.length > 80 ? `${r.modelUrl.slice(0, 80)}…` : r.modelUrl)}</a> <span style="color:#5b527a">(${esc(host)})</span></p>
 <p style="margin:6px 0 0"><strong>Quantity:</strong> ${r.quantity}</p>
+<p style="margin:6px 0 0"><strong>Delivery:</strong> ${r.delivery === "shipping" ? "wants shipping" : "local pickup"}</p>
 ${colors ? `<p style="margin:6px 0 0"><strong>Colors picked:</strong> ${esc(colors)}</p>` : ""}
 <p style="margin:16px 0 0;padding:12px 14px;background:#fff0c2;border-radius:12px;white-space:pre-wrap">${esc(message)}</p>
 ${adminUrl ? `<p style="margin:22px 0 0"><a href="${esc(adminUrl)}" style="display:inline-block;background:#ff5e3a;color:#fff;font-weight:700;text-decoration:none;padding:12px 22px;border-radius:999px;border:2px solid #1f1640">Review and send a price</a></p>` : ""}
@@ -166,7 +168,7 @@ ${adminUrl ? `<p style="margin:22px 0 0"><a href="${esc(adminUrl)}" style="displ
 
   const push = {
     title: `Custom request ${requestLabel(r.number)}`.slice(0, 250),
-    message: `${oneLine(r.name)} · ${host}${colors ? `\n🎨 ${oneLine(colors)}` : ""}\n${oneLine(r.message)}`.slice(0, 1000),
+    message: `${oneLine(r.name)} · ${host}${r.delivery === "shipping" ? " · SHIP" : ""}${colors ? `\n🎨 ${oneLine(colors)}` : ""}\n${oneLine(r.message)}`.slice(0, 1000),
     url: adminUrl,
   };
   return { subject, text, html, push };

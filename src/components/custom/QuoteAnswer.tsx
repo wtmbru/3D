@@ -9,12 +9,23 @@ import { PAYMENT_METHODS } from "@/lib/orders";
 import { formatPrice } from "@/lib/pricing";
 
 /** Accept or decline the quote, with a confirm step so a stray tap can't commit anyone. */
-export function QuoteAnswer({ id, total: quoteTotal, delivery: deliverySettings }: { id: string; total: number; delivery: DeliverySettings }) {
+export function QuoteAnswer({
+  id,
+  total: quoteTotal,
+  delivery: deliverySettings,
+  initialDelivery,
+}: {
+  id: string;
+  total: number;
+  delivery: DeliverySettings;
+  /** What they asked for when they sent the request. */
+  initialDelivery: DeliveryMethod;
+}) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [ask, setAsk] = useState<"accepted" | "declined" | null>(null);
   const [payment, setPayment] = useState<string>("");
-  const [delivery, setDelivery] = useState<DeliveryMethod>("pickup");
+  const [delivery, setDelivery] = useState<DeliveryMethod>(initialDelivery);
   const [address, setAddress] = useState<AddressDraft>(EMPTY_ADDRESS);
   const total = quoteTotal + shippingFeeFor(delivery, deliverySettings);
   const [error, setError] = useState<string | null>(null);

@@ -64,7 +64,7 @@ export default async function RequestPage(props: PageProps<"/request/[id]">) {
           {request.status === "quoted" ? (
             <>
               <p className="mt-4 text-sm text-ink-soft">Like it? Accept the quote and we&apos;ll get started. No payment is taken online.</p>
-              <QuoteAnswer id={request.id} total={total} delivery={await getDeliverySettings()} />
+              <QuoteAnswer id={request.id} total={total} delivery={await getDeliverySettings()} initialDelivery={request.delivery} />
             </>
           ) : (
             <>
@@ -140,6 +140,10 @@ export default async function RequestPage(props: PageProps<"/request/[id]">) {
               </dd>
             </div>
           )}
+          <div>
+            <dt className="font-semibold text-ink-soft">Pickup or shipping</dt>
+            <dd>{request.delivery === "shipping" ? "Ship to me (we'll ask for your address when you accept)" : "Local pickup"}</dd>
+          </div>
           <div>
             <dt className="font-semibold text-ink-soft">Your message</dt>
             <dd className="whitespace-pre-wrap">{request.message}</dd>

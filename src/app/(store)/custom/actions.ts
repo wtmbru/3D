@@ -18,6 +18,7 @@ const requestSchema = z.object({
   message: z.string().trim().min(1, "Please tell us what colors and details you'd like.").max(3000, "Please keep the message under 3,000 characters."),
   /** Filament ids the customer picked. Names and colors come from the catalog, never from the browser. */
   colorIds: z.array(z.string().max(60)).max(MAX_REQUEST_COLORS, `Please pick up to ${MAX_REQUEST_COLORS} colors.`).default([]),
+  delivery: z.enum(["pickup", "shipping"]).default("pickup"),
   quantity: z.number().int("Please enter a whole number.").min(1, "Quantity must be at least 1.").max(500, "Quantity is too high. Tell us in the message and we'll work it out."),
   name: z.string().trim().min(1, "Please enter your name.").max(80),
   email: z.string().trim().email("Please enter a valid email address.").max(200),
@@ -70,6 +71,7 @@ export async function submitRequest(input: SubmitRequestInput): Promise<SubmitRe
       message: data.message,
       quantity: data.quantity,
       colors,
+      delivery: data.delivery,
       ipHash,
     });
     // Tell her after the customer has their confirmation, so a slow email service never delays them.
