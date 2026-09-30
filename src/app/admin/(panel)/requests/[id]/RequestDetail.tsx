@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useOptimistic, useState, useTransition } from "react";
 import { swatchBackground } from "@/components/Swatch";
 import { formatPrice } from "@/lib/pricing";
-import { parseLink, REQUEST_STATUSES, replyText, requestLabel, type CustomRequest, type RequestStatus } from "@/lib/requests";
+import { parseLink, REQUEST_STATUSES, replyText, requestLabel, smsLink, type CustomRequest, type RequestStatus } from "@/lib/requests";
 import { removeRequest, saveRequestNotes, sendQuote, setRequestStatus } from "../../../request-actions";
 import { Notice, useNotice } from "../../ui";
 import { When } from "../../orders/badges";
@@ -187,6 +187,12 @@ export function RequestDetail({ request }: { request: CustomRequest }) {
                   {copied === "reply" ? "Copied!" : "Copy message to send"}
                 </button>
               )}
+              {view.quotePrice !== undefined && (
+                // Opens Messages (iPhone, or a Mac signed in to Messages) with the text ready to send.
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => (window.location.href = smsLink(request.phone, replyFor(window.location.origin)))}>
+                  Text it to {request.name.split(" ")[0]}
+                </button>
+              )}
             </div>
             {view.status === "accepted" && request.orderId && (
               <p className="mt-3 rounded-xl bg-mint-soft px-3 py-2 text-sm font-semibold">
@@ -197,7 +203,7 @@ export function RequestDetail({ request }: { request: CustomRequest }) {
               </p>
             )}
             <p className="admin-hint">
-              Saving doesn&apos;t send anything by itself. Use <strong>Copy message to send</strong> to text or email them, or they can check their page.
+              Saving doesn&apos;t send anything by itself. Use <strong>Text it</strong> to open Messages with the quote ready to send, or <strong>Copy message to send</strong> for email. They can also check their page.
             </p>
             {view.quotePrice !== undefined && (
               <pre suppressHydrationWarning className="mt-3 max-h-48 overflow-auto rounded-xl bg-cream p-3 text-xs whitespace-pre-wrap">
