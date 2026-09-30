@@ -176,3 +176,10 @@ The **star** picks which print is shown big at the top of the homepage. With no 
 - **Text buttons.** On a request (after saving a quote) and on every order, admin has a button that opens the Messages app (iPhone, or a Mac signed in to Messages) with the customer's number and the text already filled in. Nothing is sent until she presses send. Orders offer ready-made wording for Payment, Printing, Ready and Thanks (the right one is pre-selected for the order's stage) and she can edit it first. On a Mac, texts to non-iPhone customers need Text Message Forwarding turned on on her iPhone.
 - **Link previews.** Sharing a product link (iMessage, Instagram, Facebook, X…) shows a card with the product's photo (or its colors if it has no photo), its name and starting price; the other pages have their own titles and descriptions. Previews are built in `src/app/(store)/product/[slug]/opengraph-image.tsx` and `src/lib/meta.ts`; the home page uses the static `src/app/opengraph-image.png`.
 - **Search engines.** `/sitemap.xml` lists the shop pages and products; `/robots.txt` keeps the admin, orders, requests, cart and checkout out of search results. Set `SITE_URL` when you get your own domain so all of these use it.
+
+## Weight and cost estimates (private)
+
+Each product's editor has a **Weight & cost** card: for every option and material it shows an estimated weight in grams, what that plastic costs, what the product sells for, and what's left. Customers never see it. It's worked out from the model's volume × the plastic's density × how solid prints usually are × a waste allowance, so treat it as a guide (roughly ±20–30%), not the slicer's number. It covers plastic only, not her time, power or printer wear.
+
+The assumptions live in **Settings → Cost estimates**: what she pays per kilo of PLA, PETG and TPU, how solid her prints are (default 35%, typical for Bambu's default settings) and a waste allowance (default 10%). They're stored in the existing `settings` table, so there's nothing new to run in Supabase. Tip: slice one product in Bambu Studio and compare its real grams with the estimate, then nudge "how solid" until they match.
+

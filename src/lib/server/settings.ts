@@ -1,4 +1,5 @@
 import "server-only";
+import { normalizeCosts, type CostSettings } from "@/lib/costs";
 import { isSupabaseConfigured, supabaseAdmin } from "./supabase";
 
 /*
@@ -33,6 +34,11 @@ export async function saveSetting(key: string, value: object): Promise<void> {
     }
     throw new Error(`Saving the setting failed: ${error.message}`);
   }
+}
+
+/** Private cost assumptions (filament price per kg, how solid prints are). Never fails: falls back to defaults. */
+export async function getCostSettings(): Promise<CostSettings> {
+  return normalizeCosts(await getSetting<object>("costs", {}));
 }
 
 export interface HomeSettings {

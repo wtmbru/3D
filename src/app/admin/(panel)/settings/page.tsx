@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { notificationStatus } from "@/lib/server/notify";
 import { getPaymentSettings } from "@/lib/server/orders";
+import { getCostSettings } from "@/lib/server/settings";
+import { CostSettingsCard } from "./CostSettingsCard";
 import { NotificationsCard } from "./NotificationsCard";
 import { SettingsForm } from "./SettingsForm";
 
@@ -16,6 +18,7 @@ export default async function SettingsPage() {
       </p>
       <SettingsForm initial={await getPaymentSettings()} />
       <NotificationsCard status={notificationStatus()} />
+      <CostSettingsCard initial={await getCostSettings()} />
     </div>
   );
 }

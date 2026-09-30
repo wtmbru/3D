@@ -20,6 +20,8 @@ import { deleteProduct, saveProduct } from "../../actions";
 import { Notice, Switch, useNotice } from "../ui";
 import { imagesFromPaste, isPlainTextPaste, readClipboardImages, type PastedImages } from "./clipboard";
 import { ColorSelect } from "./ColorSelect";
+import { WeightCostCard } from "./WeightCostCard";
+import type { CostSettings } from "@/lib/costs";
 import { nameFromFile, readStl, slugify, uploadFile } from "./upload";
 
 interface Upload {
@@ -30,7 +32,7 @@ interface Upload {
   error?: string;
 }
 
-export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boolean }) {
+export function ProductEditor({ initial, isNew, costs }: { initial: Product; isNew: boolean; costs: CostSettings }) {
   const catalog = useCatalog();
   const router = useRouter();
   // The full product. In the editor every option lives in `variants` (a plain
@@ -749,6 +751,8 @@ export function ProductEditor({ initial, isNew }: { initial: Product; isNew: boo
               <span className="admin-hint">Default colors come from {family}, the first material checked.</span>
             </fieldset>
           </section>
+
+          <WeightCostCard product={prod} costs={costs} />
 
           <section className="admin-card space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-2">

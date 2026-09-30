@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { Metadata } from "next";
+import { getCostSettings } from "@/lib/server/settings";
 import type { Product } from "@/lib/types";
 import { ProductEditor } from "../ProductEditor";
 
 export const metadata: Metadata = { title: "New product" };
 
-export default function NewProductPage() {
+export default async function NewProductPage() {
   // The id is assigned up front so uploads have a folder before the first save.
   const blank: Product = {
     id: randomUUID(),
@@ -25,5 +26,5 @@ export default function NewProductPage() {
     featured: false,
     published: false,
   };
-  return <ProductEditor initial={blank} isNew />;
+  return <ProductEditor initial={blank} isNew costs={await getCostSettings()} />;
 }
