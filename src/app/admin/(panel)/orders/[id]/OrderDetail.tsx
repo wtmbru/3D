@@ -7,6 +7,7 @@ import { ProductThumb } from "@/components/ProductThumb";
 import { swatchBackground } from "@/components/Swatch";
 import { useCatalog } from "@/components/CatalogProvider";
 import { finishLabels } from "@/data/constants";
+import { addressText } from "@/lib/delivery";
 import {
   ITEM_STATUSES,
   ORDER_STATUSES,
@@ -251,6 +252,34 @@ export function OrderDetail({
                 <p className="text-xs font-bold tracking-wide text-ink-soft uppercase">Customer note</p>
                 <p className="mt-0.5 whitespace-pre-wrap">{order.notes}</p>
               </div>
+            )}
+          </section>
+
+          <section className="admin-card" aria-label="Delivery">
+            <h2 className="admin-h2">{order.delivery === "shipping" ? "Ship to" : "Local pickup"}</h2>
+            {order.delivery === "shipping" && order.shippingAddress ? (
+              <>
+                <address className="mt-2 not-italic">
+                  <span className="block font-semibold">{order.name}</span>
+                  {addressText(order.shippingAddress)
+                    .split("\n")
+                    .map((l) => (
+                      <span key={l} className="block">
+                        {l}
+                      </span>
+                    ))}
+                </address>
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-sm mt-3"
+                  onClick={() => copy(`${order.name}\n${addressText(order.shippingAddress!)}`, "address")}
+                >
+                  {copied === "address" ? "Copied!" : "Copy address"}
+                </button>
+                {order.shippingFee ? <p className="admin-hint">Customer paid {formatPrice(order.shippingFee)} for shipping (included in the total).</p> : null}
+              </>
+            ) : (
+              <p className="mt-2 text-sm text-ink-soft">The customer will pick this up. Arrange a time and place with them.</p>
             )}
           </section>
 

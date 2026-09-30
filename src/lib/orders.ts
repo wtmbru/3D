@@ -1,3 +1,4 @@
+import type { DeliveryMethod, ShippingAddress } from "./delivery";
 import type { ColorConfig, Finish, MaterialFamily } from "./types";
 
 /*
@@ -80,6 +81,11 @@ export interface Order {
   phone: string;
   payment: PaymentMethod;
   notes?: string;
+  /** Pickup, or shipping to `shippingAddress`. */
+  delivery: DeliveryMethod;
+  shippingAddress?: ShippingAddress;
+  /** Already included in `total`. */
+  shippingFee?: number;
   items: OrderItem[];
   total: number;
   paymentStatus: PaymentStatus;

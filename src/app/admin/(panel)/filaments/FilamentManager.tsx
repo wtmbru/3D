@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useEffect, useOptimistic, useRef, useState, useTransition } from "react";
 import { useCatalog } from "@/components/CatalogProvider";
 import { swatchBackground } from "@/components/Swatch";
@@ -81,6 +82,7 @@ export function FilamentManager() {
               filament={f}
               onEdit={() => setEditing(f)}
               onError={(text) => setNotice({ kind: "error", text })}
+              onDeleted={(text) => setNotice({ kind: "ok", text })}
             />
           ))}
           {list.length === 0 && <li className="p-6 text-center text-ink-soft">No {family} filaments yet.</li>}
@@ -101,8 +103,32 @@ export function FilamentManager() {
   );
 }
 
-function FilamentRow({ filament: f, onEdit, onError }: { filament: Filament; onEdit: () => void; onError: (t: string) => void }) {
+function FilamentRow({
+  filament: f,
+  onEdit,
+  onError,
+  onDeleted,
+}: {
+  filament: Filament;
+  onEdit: () => void;
+  onError: (t: string) => void;
+  onDeleted: (t: string) => void;
+}) {
+  const router = useRouter();
   const [pending, start] = useTransition();
+  const [deleting, startDelete] = useTransition();
+
+  function remove() {
+    if (!confirm(`Delete ${f.name}? This can't be undone.`)) return;
+    startDelete(async () => {
+      const res = await deleteFilament(f.id);
+      if (res.ok) {
+        onDeleted(`${f.name} deleted.`);
+        router.refresh();
+      } else onError(res.error);
+    });
+  }
+
   // Flips instantly; reverts on its own if the save fails.
   const [inStock, setInStock] = useOptimistic(f.inStock);
 
@@ -135,6 +161,15 @@ function FilamentRow({ filament: f, onEdit, onError }: { filament: Filament; onE
       </label>
       <button type="button" onClick={onEdit} className="btn btn-secondary btn-sm">
         Edit
+      </button>
+      <button
+        type="button"
+        onClick={remove}
+        disabled={deleting}
+        aria-label={`Delete ${f.name}`}
+        className="btn btn-secondary btn-sm text-tomato"
+      >
+        {deleting ? "Deleting…" : "Delete"}
       </button>
     </li>
   );

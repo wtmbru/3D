@@ -1,9 +1,10 @@
-import { likeLiteral } from "@/lib/lookup";
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { cache } from "react";
 import { finishLabels } from "@/data/constants";
 import { defaultsFor } from "@/lib/config";
+import type { DeliveryMethod, ShippingAddress } from "@/lib/delivery";
+import { likeLiteral } from "@/lib/lookup";
 import {
   EMPTY_PAYMENT_SETTINGS,
   type ItemStatus,
@@ -132,6 +133,9 @@ type Row = {
   phone: string;
   payment_method: PaymentMethod;
   notes: string | null;
+  delivery_method?: DeliveryMethod; // absent until migration 0008 has been run
+  shipping_address?: ShippingAddress | null;
+  shipping_fee?: string | number;
   items: OrderItem[];
   total: string | number;
   payment_status: PaymentStatus;
@@ -150,6 +154,9 @@ const fromRow = (r: Row): Order => ({
   phone: r.phone,
   payment: r.payment_method,
   ...(r.notes ? { notes: r.notes } : {}),
+  delivery: r.delivery_method ?? "pickup",
+  ...(r.shipping_address ? { shippingAddress: r.shipping_address } : {}),
+  ...(Number(r.shipping_fee) > 0 ? { shippingFee: Number(r.shipping_fee) } : {}),
   items: r.items,
   total: Number(r.total),
   paymentStatus: r.payment_status,
@@ -165,6 +172,10 @@ export interface NewOrder {
   phone: string;
   payment: PaymentMethod;
   notes?: string;
+  delivery?: DeliveryMethod;
+  shippingAddress?: ShippingAddress;
+  /** Already included in `total`. */
+  shippingFee?: number;
   items: OrderItem[];
   total: number;
   ipHash?: string;
@@ -190,6 +201,9 @@ function backend(): "db" | "memory" {
 
 function throwIfError(error: { message: string } | null, what: string) {
   if (!error) return;
+  if (/delivery_method|shipping_address|shipping_fee/.test(error.message)) {
+    throw new Error("The database needs an update: run supabase/migrations/0008_delivery.sql in Supabase's SQL Editor.");
+  }
   if (/relation .*orders|Could not find the table|schema cache/.test(error.message)) {
     throw new Error("The database needs an update: run supabase/migrations/0003_orders.sql in Supabase's SQL Editor.");
   }
@@ -214,6 +228,9 @@ export async function insertOrder(o: NewOrder): Promise<Order> {
       phone: o.phone,
       payment: o.payment,
       ...(o.notes ? { notes: o.notes } : {}),
+      delivery: o.delivery ?? "pickup",
+      ...(o.shippingAddress ? { shippingAddress: o.shippingAddress } : {}),
+      ...(o.shippingFee ? { shippingFee: o.shippingFee } : {}),
       items: o.items,
       total: o.total,
       paymentStatus: "unpaid",
@@ -229,6 +246,8 @@ export async function insertOrder(o: NewOrder): Promise<Order> {
     phone: o.phone,
     payment_method: o.payment,
     notes: o.notes || null,
+    // Only shipped orders carry the new columns, so pickup orders keep working before migration 0008 is run.
+    ...(o.delivery === "shipping" ? { delivery_method: "shipping", shipping_address: o.shippingAddress, shipping_fee: o.shippingFee ?? 0 } : {}),
     items: o.items,
     total: o.total,
     ip_hash: o.ipHash ?? null,

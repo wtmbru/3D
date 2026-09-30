@@ -5,10 +5,12 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { placeOrder } from "@/app/(store)/checkout/actions";
 import { useCatalog } from "@/components/CatalogProvider";
+import { DeliveryFields, EMPTY_ADDRESS, toAddress, type AddressDraft } from "@/components/DeliveryFields";
 import { SwatchDot } from "@/components/Swatch";
 import { useCart, useCartHydrated } from "@/lib/cart";
 import { useHydrated } from "@/lib/useHydrated";
 import { resolveCartLines } from "@/lib/cartLines";
+import { shippingFeeFor, type DeliveryMethod, type DeliverySettings } from "@/lib/delivery";
 import { PAYMENT_METHODS, type PaymentMethod } from "@/lib/orders";
 import { formatPrice, getFilament } from "@/lib/pricing";
 import type { Product } from "@/lib/types";
@@ -20,19 +22,23 @@ const paymentBlurbs: Record<PaymentMethod, string> = {
   cashapp: "Send to our Cash App",
 };
 
-export function CheckoutForm({ products }: { products: Product[] }) {
+export function CheckoutForm({ products, delivery: deliverySettings }: { products: Product[]; delivery: DeliverySettings }) {
   const catalog = useCatalog();
   const router = useRouter();
   const hydrated = useCartHydrated();
   const items = useCart((s) => s.items);
   const clear = useCart((s) => s.clear);
   const [payment, setPayment] = useState<PaymentMethod | "">("");
+  const [delivery, setDelivery] = useState<DeliveryMethod>("pickup");
+  const [address, setAddress] = useState<AddressDraft>(EMPTY_ADDRESS);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const ready = useHydrated();
 
   const lines = resolveCartLines(catalog, products, items);
-  const total = lines.reduce((sum, l) => sum + l.unit * l.item.qty, 0);
+  const subtotal = lines.reduce((sum, l) => sum + l.unit * l.item.qty, 0);
+  const shipping = shippingFeeFor(delivery, deliverySettings);
+  const total = subtotal + shipping;
 
   if (!hydrated) return <div className="mt-10 h-64 animate-pulse rounded-3xl bg-cream-deep" />;
 
@@ -58,6 +64,8 @@ export function CheckoutForm({ products }: { products: Product[] }) {
         email: String(form.get("email") ?? ""),
         phone: String(form.get("phone") ?? ""),
         payment: payment as PaymentMethod,
+        delivery,
+        ...(delivery === "shipping" ? { shippingAddress: toAddress(address) } : {}),
         notes: String(form.get("notes") ?? ""),
         website: String(form.get("website") ?? ""),
         // Only the design goes to the server. It works out the prices itself.
@@ -96,6 +104,13 @@ export function CheckoutForm({ products }: { products: Product[] }) {
               Website
               <input type="text" name="website" tabIndex={-1} autoComplete="off" />
             </label>
+          </div>
+        </section>
+
+        <section className="chunky rounded-[var(--radius-blob)] bg-paper p-6">
+          <h2 className="font-display text-2xl font-extrabold">Pickup or shipping?</h2>
+          <div className="mt-5">
+            <DeliveryFields method={delivery} onMethod={setDelivery} address={address} onAddress={setAddress} settings={deliverySettings} />
           </div>
         </section>
 
@@ -170,6 +185,12 @@ export function CheckoutForm({ products }: { products: Product[] }) {
             );
           })}
         </ul>
+        {delivery === "shipping" && (
+          <div className="mt-3 flex items-baseline justify-between text-sm">
+            <span className="font-semibold text-ink-soft">Shipping</span>
+            <span className="font-semibold tabular-nums">{shipping > 0 ? formatPrice(shipping) : "Free"}</span>
+          </div>
+        )}
         <div className="mt-4 flex items-baseline justify-between border-t-2 border-dashed border-ink/20 pt-4">
           <span className="font-display text-lg font-bold">Total</span>
           <span className="font-display text-3xl font-extrabold tabular-nums">{formatPrice(total)}</span>

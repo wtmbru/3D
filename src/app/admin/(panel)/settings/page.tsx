@@ -1,7 +1,8 @@
 import type { Metadata } from "next";
 import { notificationStatus } from "@/lib/server/notify";
 import { getPaymentSettings } from "@/lib/server/orders";
-import { getCostSettings } from "@/lib/server/settings";
+import { getCostSettings, getDeliverySettings } from "@/lib/server/settings";
+import { DeliveryCard } from "./DeliveryCard";
 import { CostSettingsCard } from "./CostSettingsCard";
 import { NotificationsCard } from "./NotificationsCard";
 import { SettingsForm } from "./SettingsForm";
@@ -17,6 +18,7 @@ export default async function SettingsPage() {
         don&apos;t accept it. Customers will then be told you&apos;ll message them the details.
       </p>
       <SettingsForm initial={await getPaymentSettings()} />
+      <DeliveryCard initial={await getDeliverySettings()} />
       <NotificationsCard status={notificationStatus()} />
       <CostSettingsCard initial={await getCostSettings()} />
     </div>

@@ -1,5 +1,6 @@
 import "server-only";
 import { site } from "@/config/site";
+import { addressLines } from "@/lib/delivery";
 import { orderLabel, paymentLabel, type Order } from "@/lib/orders";
 import { colorsSummary, linkHost, requestLabel, type CustomRequest } from "@/lib/requests";
 import { formatPrice } from "@/lib/pricing";
@@ -79,6 +80,7 @@ export function orderMessage(order: Order) {
   const adminUrl = base ? `${base}/admin/orders/${order.id}` : undefined;
   const subject = `New order ${orderLabel(order.number)} · ${formatPrice(order.total)} · ${oneLine(order.name)}`;
   const items = order.items.map(itemLine);
+  const ship = order.delivery === "shipping" && order.shippingAddress ? addressLines(order.shippingAddress) : null;
 
   const text = [
     `${site.name}: new order ${orderLabel(order.number)}`,
@@ -87,6 +89,7 @@ export function orderMessage(order: Order) {
     `Phone: ${order.phone}`,
     `Email: ${order.email}`,
     `Paying by: ${paymentLabel(order.payment)} (${formatPrice(order.total)})`,
+    ship ? `Ship to: ${ship.join(", ")}` : `Local pickup`,
     ``,
     ...items.map((l) => `• ${l}`),
     // Quote the note line by line so nothing in it can pass for one of our own lines.
@@ -103,6 +106,7 @@ export function orderMessage(order: Order) {
 <p style="margin:0;font-size:17px;font-weight:700">${esc(order.name)}</p>
 <p style="margin:4px 0 0"><a href="tel:${esc(order.phone.replace(/[^\d+]/g, ""))}" style="color:#1f1640">${esc(order.phone)}</a><br><a href="mailto:${esc(order.email)}" style="color:#1f1640">${esc(order.email)}</a></p>
 <hr style="border:none;border-top:2px dashed #e5dcc9;margin:18px 0">
+<p style="margin:0 0 12px;padding:10px 14px;background:#d6e4ff;border-radius:12px"><strong>${ship ? "Ship to" : "Local pickup"}</strong>${ship ? `<br>${ship.map(esc).join("<br>")}` : ""}</p>
 <ul style="margin:0;padding-left:18px;line-height:1.55">${items.map((l) => `<li>${esc(l)}</li>`).join("")}</ul>
 ${order.notes ? `<p style="margin:16px 0 0;padding:10px 14px;background:#fff0c2;border-radius:12px"><strong>Customer note:</strong> ${esc(order.notes)}</p>` : ""}
 ${adminUrl ? `<p style="margin:22px 0 0"><a href="${esc(adminUrl)}" style="display:inline-block;background:#ff5e3a;color:#fff;font-weight:700;text-decoration:none;padding:12px 22px;border-radius:999px;border:2px solid #1f1640">Open the order</a></p>` : ""}
@@ -111,7 +115,7 @@ ${adminUrl ? `<p style="margin:22px 0 0"><a href="${esc(adminUrl)}" style="displ
   // Pushover limits: title 250 chars, message 1024.
   const push = {
     title: `New order ${orderLabel(order.number)}`.slice(0, 250),
-    message: [`${oneLine(order.name)} · ${formatPrice(order.total)} · ${paymentLabel(order.payment)}`, ...items.slice(0, 5).map((l) => `• ${l}`)]
+    message: [`${oneLine(order.name)} · ${formatPrice(order.total)} · ${paymentLabel(order.payment)} · ${ship ? "SHIP" : "Pickup"}`, ...items.slice(0, 5).map((l) => `• ${l}`)]
       .join("\n")
       .slice(0, 1000),
     url: adminUrl,
@@ -282,6 +286,7 @@ export function sampleOrder(): Order {
     payment: "zelle",
     notes: "This is a test. No real order was placed.",
     total: 0,
+    delivery: "pickup",
     paymentStatus: "unpaid",
     status: "new",
     items: [

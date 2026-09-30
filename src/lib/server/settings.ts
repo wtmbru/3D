@@ -1,5 +1,6 @@
 import "server-only";
 import { normalizeCosts, type CostSettings } from "@/lib/costs";
+import { normalizeDelivery, type DeliverySettings } from "@/lib/delivery";
 import { isSupabaseConfigured, supabaseAdmin } from "./supabase";
 
 /*
@@ -39,6 +40,11 @@ export async function saveSetting(key: string, value: object): Promise<void> {
 /** Private cost assumptions (filament price per kg, how solid prints are). Never fails: falls back to defaults. */
 export async function getCostSettings(): Promise<CostSettings> {
   return normalizeCosts(await getSetting<object>("costs", {}));
+}
+
+/** Pickup note and flat shipping fee. Never fails: falls back to free shipping and no note. */
+export async function getDeliverySettings(): Promise<DeliverySettings> {
+  return normalizeDelivery(await getSetting<object>("delivery", {}));
 }
 
 export interface HomeSettings {

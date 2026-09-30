@@ -3,9 +3,11 @@
 import { after } from "next/server";
 import { z } from "zod";
 import { orderFromRequest } from "@/lib/customOrder";
+import { shippingAddressSchema, shippingFeeFor } from "@/lib/delivery";
 import { PAYMENT_METHODS, type PaymentMethod } from "@/lib/orders";
 import { notifyNewOrder, notifyQuoteResponse } from "@/lib/server/notify";
 import { insertOrder } from "@/lib/server/orders";
+import { getDeliverySettings } from "@/lib/server/settings";
 import { linkRequestOrder, respondToQuote, updateRequest } from "@/lib/server/requests";
 
 export type QuoteAnswer = { ok: true; orderId?: string } | { ok: false; error: string };
@@ -14,6 +16,8 @@ const schema = z.object({
   id: z.string().uuid(),
   decision: z.enum(["accepted", "declined"]),
   payment: z.enum(PAYMENT_METHODS.map((m) => m.id) as [string, ...string[]]).optional(),
+  delivery: z.enum(["pickup", "shipping"]).optional(),
+  shippingAddress: shippingAddressSchema.optional(),
 });
 
 /**
@@ -22,10 +26,20 @@ const schema = z.object({
  * Accepting turns the request into an order and returns it, so they can go straight to
  * the payment instructions.
  */
-export async function answerQuote(id: string, decision: "accepted" | "declined", payment?: string): Promise<QuoteAnswer> {
-  const parsed = schema.safeParse({ id, decision, payment });
-  if (!parsed.success) return { ok: false, error: "Please choose how you'd like to pay." };
-  if (parsed.data.decision === "accepted" && !parsed.data.payment) return { ok: false, error: "Please choose how you'd like to pay." };
+export async function answerQuote(
+  id: string,
+  decision: "accepted" | "declined",
+  payment?: string,
+  delivery?: "pickup" | "shipping",
+  shippingAddress?: z.input<typeof shippingAddressSchema>,
+): Promise<QuoteAnswer> {
+  const parsed = schema.safeParse({ id, decision, payment, delivery, shippingAddress });
+  if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Please check your details." };
+  if (parsed.data.decision === "accepted") {
+    if (!parsed.data.payment) return { ok: false, error: "Please choose how you'd like to pay." };
+    if (!parsed.data.delivery) return { ok: false, error: "Please choose pickup or shipping." };
+    if (parsed.data.delivery === "shipping" && !parsed.data.shippingAddress) return { ok: false, error: "Please enter your shipping address." };
+  }
 
   try {
     // The status flip is the lock: only one answer can win, so only one order is ever made.
@@ -39,7 +53,10 @@ export async function answerQuote(id: string, decision: "accepted" | "declined",
 
     let order;
     try {
-      order = await insertOrder(orderFromRequest(r, parsed.data.payment as PaymentMethod));
+      const method = parsed.data.delivery ?? "pickup";
+      // The fee comes from the shop's settings, never from the browser.
+      const fee = shippingFeeFor(method, await getDeliverySettings());
+      order = await insertOrder(orderFromRequest(r, parsed.data.payment as PaymentMethod, { method, address: parsed.data.shippingAddress, fee }));
     } catch (e) {
       // Don't leave them "accepted" with no order: put the quote back so they can try again.
       await updateRequest(r.id, { status: "quoted" }).catch(() => undefined);

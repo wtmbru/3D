@@ -3,10 +3,12 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { swatchBackground } from "@/components/Swatch";
 import { finishLabels } from "@/data/constants";
+import { addressLines } from "@/lib/delivery";
 import { orderLabel, ORDER_STATUSES, PAYMENT_STATUSES, paymentLabel, progressSteps, type PaymentMethod } from "@/lib/orders";
 import { formatPrice, getFilament } from "@/lib/pricing";
 import { getCatalog } from "@/lib/server/catalog";
 import { getOrderById, getPaymentSettings } from "@/lib/server/orders";
+import { getDeliverySettings } from "@/lib/server/settings";
 import { site } from "@/config/site";
 
 // Anyone with the link (an unguessable id) can see this. Keep it out of search results.
@@ -14,7 +16,7 @@ export const metadata: Metadata = { title: "Your order", robots: { index: false,
 
 export default async function OrderPage(props: PageProps<"/order/[id]">) {
   const { id } = await props.params;
-  const [order, payments, catalog] = await Promise.all([getOrderById(id), getPaymentSettings(), getCatalog()]);
+  const [order, payments, catalog, deliverySettings] = await Promise.all([getOrderById(id), getPaymentSettings(), getCatalog(), getDeliverySettings()]);
   if (!order) notFound();
 
   const handle = payments[order.payment as PaymentMethod];
@@ -54,6 +56,25 @@ export default async function OrderPage(props: PageProps<"/order/[id]">) {
           <p className="mt-3 text-sm text-ink-soft">We&apos;ll mark your order as paid once we&apos;ve received it.</p>
         </section>
       )}
+
+      <section className="chunky mt-8 rounded-[var(--radius-blob)] bg-paper p-6" aria-label="Delivery">
+        <h2 className="font-display text-2xl font-extrabold">{order.delivery === "shipping" ? "Shipping to" : "Local pickup"}</h2>
+        {order.delivery === "shipping" && order.shippingAddress ? (
+          <>
+            <address className="mt-3 not-italic">
+              <span className="block font-semibold">{order.name}</span>
+              {addressLines(order.shippingAddress).map((l) => (
+                <span key={l} className="block">
+                  {l}
+                </span>
+              ))}
+            </address>
+            <p className="mt-3 text-sm text-ink-soft">Wrong address? Reach out at {site.email} as soon as you can.</p>
+          </>
+        ) : (
+          <p className="mt-2">{deliverySettings.pickupNote || "We'll message you to arrange a pickup time and place."}</p>
+        )}
+      </section>
 
       <section className="chunky mt-8 rounded-[var(--radius-blob)] bg-paper p-6" aria-label="Order progress">
         <div className="flex flex-wrap items-center gap-2">
@@ -124,6 +145,12 @@ export default async function OrderPage(props: PageProps<"/order/[id]">) {
             </li>
           ))}
         </ul>
+        {order.shippingFee ? (
+          <div className="mt-4 flex items-baseline justify-between text-sm">
+            <span className="font-semibold text-ink-soft">Shipping</span>
+            <span className="font-semibold tabular-nums">{formatPrice(order.shippingFee)}</span>
+          </div>
+        ) : null}
         <div className="mt-5 flex items-baseline justify-between border-t-2 border-dashed border-ink/20 pt-4">
           <span className="font-display text-lg font-bold">Total</span>
           <span className="font-display text-3xl font-extrabold tabular-nums">{formatPrice(order.total)}</span>

@@ -71,7 +71,7 @@ export function WeightCostCard({ product, costs }: { product: Product; costs: Co
                         <th className="py-1 pr-2">Weight</th>
                         <th className="py-1 pr-2">Plastic</th>
                         <th className="py-1 pr-2">Sells for</th>
-                        <th className="py-1">Left</th>
+                        <th className="py-1">Profit</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -97,7 +97,7 @@ export function WeightCostCard({ product, costs }: { product: Product; costs: Co
         </ul>
       )}
       <p className="admin-hint">
-        &quot;Left&quot; is the selling price minus the plastic only, before your time, power and printer wear. Adjust the assumptions in Settings → Cost estimates.
+        &quot;Profit&quot; is the selling price minus the plastic only, before your time, power and printer wear. Adjust the assumptions in Settings → Cost estimates.
       </p>
     </section>
   );

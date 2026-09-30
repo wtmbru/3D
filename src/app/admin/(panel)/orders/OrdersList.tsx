@@ -86,7 +86,7 @@ export function OrdersList({ orders }: { orders: Order[] }) {
               <div className="min-w-0 flex-1 basis-48">
                 <p className="truncate font-display font-bold">{o.name}</p>
                 <p className="truncate text-sm text-ink-soft">
-                  {itemCount(o)} {itemCount(o) === 1 ? "item" : "items"} · {paymentLabel(o.payment)}
+                  {itemCount(o)} {itemCount(o) === 1 ? "item" : "items"} · {paymentLabel(o.payment)} · {o.delivery === "shipping" ? "Ship 📦" : "Pickup"}
                 </p>
               </div>
               <div className="hidden -space-x-1.5 md:flex" aria-hidden="true">

@@ -22,7 +22,7 @@ export function defaultTextKind(o: Pick<Order, "status" | "paymentStatus">): Tex
 /** Ready-to-send texts for an order. She can edit them before sending. */
 export function orderText(
   kind: TextKind,
-  o: Pick<Order, "name" | "number" | "total">,
+  o: Pick<Order, "name" | "number" | "total" | "delivery">,
   extra: { trackingUrl: string; methodLabel: string; handle?: string },
 ): string {
   const first = o.name.trim().split(/\s+/)[0] || "there";
@@ -36,7 +36,9 @@ export function orderText(
     case "printing":
       return `Hi ${first}! Good news: your order ${num} is printing now.${link}`;
     case "ready":
-      return `Hi ${first}! Your order ${num} is ready 🎉 Let me know when you'd like to pick it up, or if you'd like it delivered.${link}`;
+      return o.delivery === "shipping"
+        ? `Hi ${first}! Your order ${num} is ready 🎉 I'll get it shipped out soon.${link}`
+        : `Hi ${first}! Your order ${num} is ready 🎉 Let me know when you'd like to pick it up.${link}`;
     case "thanks":
       return `Thanks so much, ${first}! We hope you love your order ${num}. If you do, a photo or a share means a lot to a small shop. 💛`;
   }

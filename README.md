@@ -183,3 +183,9 @@ Each product's editor has a **Weight & cost** card: for every option and materia
 
 The assumptions live in **Settings → Cost estimates**: what she pays per kilo of PLA, PETG and TPU, how solid her prints are (default 35%, typical for Bambu's default settings) and a waste allowance (default 10%). They're stored in the existing `settings` table, so there's nothing new to run in Supabase. Tip: slice one product in Bambu Studio and compare its real grams with the estimate, then nudge "how solid" until they match.
 
+## Pickup or shipping
+
+At checkout, and when a customer accepts a custom quote, they choose **local pickup** or **ship to me**. Shipping requires a US street address, city, state and ZIP. In **Settings → Pickup & shipping** she sets a flat shipping fee (0 = free) and pickup instructions; the fee is added to shipped orders on the server, never taken from the browser. The address and fee show on the customer's order page, in the admin order (with a **Copy address** button), in the orders list ("Ship 📦" or "Pickup") and in the email and phone alerts. The "ready" text wording changes for shipped orders. Run `supabase/migrations/0008_delivery.sql`: pickup orders keep working without it, but shipped orders need it. Tracking numbers aren't built yet.
+
+Filaments can be deleted straight from the list (a colour used as a product default or in a palette is refused with an explanation; mark it out of stock instead).
+

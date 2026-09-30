@@ -4,11 +4,13 @@ import { createHash } from "node:crypto";
 import { after } from "next/server";
 import { z } from "zod";
 import { FAMILIES } from "@/data/constants";
+import { shippingAddressSchema, shippingFeeFor } from "@/lib/delivery";
 import { MAX_QTY } from "@/lib/pricing";
 import { clientIp } from "@/lib/server/auth";
 import { getCatalog, getProducts } from "@/lib/server/catalog";
 import { notifyNewOrder } from "@/lib/server/notify";
 import { buildOrderItems, countRecentOrders, insertOrder } from "@/lib/server/orders";
+import { getDeliverySettings } from "@/lib/server/settings";
 
 // Orders are public (no login), so the basics against abuse live here.
 const MAX_ORDERS_PER_HOUR = 5;
@@ -35,6 +37,9 @@ const orderSchema = z.object({
     }, "Please enter a valid phone number."),
   payment: z.enum(["zelle", "venmo", "cashapp"], { message: "Please choose how you'll pay." }),
   notes: z.string().trim().max(500).optional(),
+  delivery: z.enum(["pickup", "shipping"], { message: "Please choose pickup or shipping." }),
+  /** Required when shipping. */
+  shippingAddress: shippingAddressSchema.optional(),
   /** Honeypot: hidden from people, so only bots fill it in. */
   website: z.string().max(200).optional(),
   items: z.array(cartItemSchema).min(1, "Your cart is empty.").max(20, "That's a lot of items! Please split it into two orders."),
@@ -48,6 +53,7 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Please check your details." };
   const data = parsed.data;
   if (data.website) return { ok: false, error: "Something went wrong. Please try again." };
+  if (data.delivery === "shipping" && !data.shippingAddress) return { ok: false, error: "Please enter your shipping address." };
 
   try {
     const ipHash = createHash("sha256")
@@ -62,14 +68,19 @@ export async function placeOrder(input: PlaceOrderInput): Promise<PlaceOrderResu
     const built = buildOrderItems(catalog, products, data.items);
     if (!built.ok) return built;
 
+    // The fee comes from the shop's settings, never from the browser.
+    const fee = shippingFeeFor(data.delivery, await getDeliverySettings());
+
     const order = await insertOrder({
       name: data.name,
       email: data.email,
       phone: data.phone,
       payment: data.payment,
       notes: data.notes,
+      delivery: data.delivery,
+      ...(data.delivery === "shipping" ? { shippingAddress: data.shippingAddress, shippingFee: fee } : {}),
       items: built.items,
-      total: built.total,
+      total: Math.round((built.total + fee) * 100) / 100,
       ipHash,
     });
     // Tell her after the customer has their confirmation, so a slow email service never delays them.

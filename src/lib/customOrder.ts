@@ -1,13 +1,18 @@
 import { linkHost, requestLabel, type CustomRequest } from "./requests";
 import type { NewOrder } from "./server/orders";
 import type { PaymentMethod } from "./orders";
+import type { DeliveryMethod, ShippingAddress } from "./delivery";
 
 /**
  * An accepted custom request, as an order: one line for the custom print at the quoted
  * price, with the colors the customer picked. The model link and message travel in the
  * order's note so she has everything on the order page.
  */
-export function orderFromRequest(r: CustomRequest, payment: PaymentMethod): NewOrder {
+export function orderFromRequest(
+  r: CustomRequest,
+  payment: PaymentMethod,
+  delivery: { method: DeliveryMethod; address?: ShippingAddress; fee: number } = { method: "pickup", fee: 0 },
+): NewOrder {
   const price = r.quotePrice ?? 0;
   const head = `From custom request ${requestLabel(r.number)}\nModel (${linkHost(r.modelUrl)}): ${r.modelUrl}\n\n`;
   return {
@@ -16,6 +21,8 @@ export function orderFromRequest(r: CustomRequest, payment: PaymentMethod): NewO
     phone: r.phone,
     payment,
     number: r.number,
+    delivery: delivery.method,
+    ...(delivery.method === "shipping" ? { shippingAddress: delivery.address, shippingFee: delivery.fee } : {}),
     notes: `${head}${r.message}`.slice(0, 1000),
     items: [
       {
@@ -40,6 +47,6 @@ export function orderFromRequest(r: CustomRequest, payment: PaymentMethod): NewO
         status: "queued",
       },
     ],
-    total: Math.round(price * r.quantity * 100) / 100,
+    total: Math.round((price * r.quantity + (delivery.method === "shipping" ? delivery.fee : 0)) * 100) / 100,
   };
 }

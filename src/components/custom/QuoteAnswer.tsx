@@ -3,21 +3,37 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { answerQuote } from "@/app/(store)/request/[id]/actions";
+import { DeliveryFields, EMPTY_ADDRESS, toAddress, type AddressDraft } from "@/components/DeliveryFields";
+import { shippingFeeFor, type DeliveryMethod, type DeliverySettings } from "@/lib/delivery";
 import { PAYMENT_METHODS } from "@/lib/orders";
 import { formatPrice } from "@/lib/pricing";
 
 /** Accept or decline the quote, with a confirm step so a stray tap can't commit anyone. */
-export function QuoteAnswer({ id, total }: { id: string; total: number }) {
+export function QuoteAnswer({ id, total: quoteTotal, delivery: deliverySettings }: { id: string; total: number; delivery: DeliverySettings }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [ask, setAsk] = useState<"accepted" | "declined" | null>(null);
   const [payment, setPayment] = useState<string>("");
+  const [delivery, setDelivery] = useState<DeliveryMethod>("pickup");
+  const [address, setAddress] = useState<AddressDraft>(EMPTY_ADDRESS);
+  const total = quoteTotal + shippingFeeFor(delivery, deliverySettings);
   const [error, setError] = useState<string | null>(null);
 
   function send(decision: "accepted" | "declined") {
     setError(null);
+    if (decision === "accepted" && delivery === "shipping") {
+      // These fields aren't in a <form>, so check them here; the server checks again.
+      const a = toAddress(address);
+      if (!a.line1 || !a.city || !a.state || !/^\d{5}(-\d{4})?$/.test(a.zip)) {
+        setError("Please fill in your street address, city, state and a 5-digit ZIP code.");
+        return;
+      }
+    }
     start(async () => {
-      const res = await answerQuote(id, decision, decision === "accepted" ? payment : undefined);
+      const res =
+        decision === "accepted"
+          ? await answerQuote(id, decision, payment, delivery, delivery === "shipping" ? toAddress(address) : undefined)
+          : await answerQuote(id, decision);
       if (!res.ok) {
         setError(res.error);
         setAsk(null);
@@ -47,6 +63,7 @@ export function QuoteAnswer({ id, total }: { id: string; total: number }) {
             {ask === "accepted" ? `Accept this quote for ${formatPrice(total)}?` : "Decline this quote?"}
           </p>
           {ask === "accepted" ? (
+            <>
             <fieldset className="mt-3">
               <legend className="text-sm text-ink-soft">How will you pay? You won&apos;t pay online. We&apos;ll show you where to send it next.</legend>
               <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label="Payment method">
@@ -63,6 +80,13 @@ export function QuoteAnswer({ id, total }: { id: string; total: number }) {
                 ))}
               </div>
             </fieldset>
+            <div className="mt-4">
+              <p className="text-sm text-ink-soft">Pickup or shipping?</p>
+              <div className="mt-2">
+                <DeliveryFields idPrefix="quote-delivery" method={delivery} onMethod={setDelivery} address={address} onAddress={setAddress} settings={deliverySettings} />
+              </div>
+            </div>
+            </>
           ) : (
             <p className="mt-1 text-sm text-ink-soft">We&apos;ll let it go. You can always send a new request.</p>
           )}

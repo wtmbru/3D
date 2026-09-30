@@ -7,6 +7,7 @@ import { linkHost, REQUEST_STATUSES, requestLabel } from "@/lib/requests";
 import { formatPrice } from "@/lib/pricing";
 import { QuoteAnswer } from "@/components/custom/QuoteAnswer";
 import { getRequestById } from "@/lib/server/requests";
+import { getDeliverySettings } from "@/lib/server/settings";
 
 // Anyone with the link (an unguessable id) can see this. Keep it out of search results.
 export const metadata: Metadata = { title: "Your custom request", robots: { index: false, follow: false } };
@@ -63,7 +64,7 @@ export default async function RequestPage(props: PageProps<"/request/[id]">) {
           {request.status === "quoted" ? (
             <>
               <p className="mt-4 text-sm text-ink-soft">Like it? Accept the quote and we&apos;ll get started. No payment is taken online.</p>
-              <QuoteAnswer id={request.id} total={total} />
+              <QuoteAnswer id={request.id} total={total} delivery={await getDeliverySettings()} />
             </>
           ) : (
             <>
