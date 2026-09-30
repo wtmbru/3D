@@ -236,6 +236,40 @@ export async function notifyNewRequest(r: CustomRequest): Promise<ChannelResult[
   return results;
 }
 
+/** Tells the shop owner the customer accepted or declined a quote. Never throws. */
+export async function notifyQuoteResponse(r: CustomRequest, decision: "accepted" | "declined"): Promise<ChannelResult[]> {
+  const base = siteUrl();
+  const adminUrl = base ? `${base}/admin/requests/${r.id}` : undefined;
+  const verb = decision === "accepted" ? "ACCEPTED" : "declined";
+  const price = r.quotePrice !== undefined ? formatPrice(r.quotePrice * r.quantity) : "";
+  const subject = `Quote ${verb} · ${requestLabel(r.number)} · ${oneLine(r.name)}`;
+  const text = [
+    `${site.name}: ${oneLine(r.name)} ${verb} the quote for request ${requestLabel(r.number)}${price ? ` (${price})` : ""}.`,
+    `Phone: ${r.phone}`,
+    `Email: ${r.email}`,
+    ...(adminUrl ? [``, `Open it: ${adminUrl}`] : []),
+  ].join("\n");
+  const html = `<!doctype html><html><body style="margin:0;padding:24px;background:#fff6ea;font-family:-apple-system,Segoe UI,Helvetica,Arial,sans-serif;color:#1f1640">
+<div style="max-width:560px;margin:0 auto;background:#fff;border:2px solid #1f1640;border-radius:20px;padding:24px">
+<p style="margin:0;font-size:13px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#5b527a">${esc(site.name)}</p>
+<h1 style="margin:6px 0 0;font-size:26px">Quote ${esc(verb)} · ${esc(requestLabel(r.number))}</h1>
+<p style="margin:12px 0 0;font-size:17px"><strong>${esc(r.name)}</strong>${price ? ` · ${esc(price)}` : ""}</p>
+<p style="margin:4px 0 0"><a href="tel:${esc(r.phone.replace(/[^\d+]/g, ""))}" style="color:#1f1640">${esc(r.phone)}</a><br><a href="mailto:${esc(r.email)}" style="color:#1f1640">${esc(r.email)}</a></p>
+${adminUrl ? `<p style="margin:22px 0 0"><a href="${esc(adminUrl)}" style="display:inline-block;background:#ff5e3a;color:#fff;font-weight:700;text-decoration:none;padding:12px 22px;border-radius:999px;border:2px solid #1f1640">Open the request</a></p>` : ""}
+</div></body></html>`;
+  const msg = {
+    subject,
+    text,
+    html,
+    push: { title: `Quote ${verb} · ${requestLabel(r.number)}`.slice(0, 250), message: `${oneLine(r.name)}${price ? ` · ${price}` : ""}`.slice(0, 1000), url: adminUrl },
+  };
+  const results = await Promise.all([sendEmail(msg), sendPush(msg)]);
+  for (const res of results) {
+    if (res.status === "failed") console.error(`Request ${requestLabel(r.number)}: ${res.channel} quote-response notification failed: ${res.detail}`);
+  }
+  return results;
+}
+
 /** A pretend order, used by the Settings page's "Send a test" button. */
 export function sampleOrder(): Order {
   return {

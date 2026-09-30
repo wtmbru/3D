@@ -16,6 +16,7 @@ export function Footer() {
             <li><Link className="hover:text-cream" href="/shop">All products</Link></li>
             <li><Link className="hover:text-cream" href="/colors">Filament colors</Link></li>
             <li><Link className="hover:text-cream" href="/custom">Custom print request</Link></li>
+            <li><Link className="hover:text-cream" href="/track">Track your order</Link></li>
             <li><Link className="hover:text-cream" href="/cart">Cart</Link></li>
           </ul>
         </div>

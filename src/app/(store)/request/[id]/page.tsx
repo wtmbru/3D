@@ -5,6 +5,7 @@ import { swatchBackground } from "@/components/Swatch";
 import { site } from "@/config/site";
 import { linkHost, REQUEST_STATUSES, requestLabel } from "@/lib/requests";
 import { formatPrice } from "@/lib/pricing";
+import { QuoteAnswer } from "@/components/custom/QuoteAnswer";
 import { getRequestById } from "@/lib/server/requests";
 
 // Anyone with the link (an unguessable id) can see this. Keep it out of search results.
@@ -35,9 +36,19 @@ export default async function RequestPage(props: PageProps<"/request/[id]">) {
 
       {declined ? (
         <section className="chunky mt-8 rounded-[var(--radius-blob)] bg-cream-deep p-6">
-          <h2 className="font-display text-2xl font-extrabold">We couldn&apos;t take this one</h2>
-          {request.quoteNote && <p className="mt-3 whitespace-pre-wrap">{request.quoteNote}</p>}
-          <p className="mt-3 text-sm text-ink-soft">Questions? Reach out at {site.email}.</p>
+          {request.quotePrice !== undefined ? (
+            <>
+              <h2 className="font-display text-2xl font-extrabold">This request is closed</h2>
+              <p className="mt-3">The quote of {formatPrice(request.quotePrice * request.quantity)} wasn&apos;t accepted.</p>
+              <p className="mt-3 text-sm text-ink-soft">Changed your mind? Reach out at {site.email}, or send a new request.</p>
+            </>
+          ) : (
+            <>
+              <h2 className="font-display text-2xl font-extrabold">We couldn&apos;t take this one</h2>
+              {request.quoteNote && <p className="mt-3 whitespace-pre-wrap">{request.quoteNote}</p>}
+              <p className="mt-3 text-sm text-ink-soft">Questions? Reach out at {site.email}.</p>
+            </>
+          )}
         </section>
       ) : quoted ? (
         <section className="chunky mt-8 rounded-[var(--radius-blob)] bg-sun-soft p-6">
@@ -49,11 +60,14 @@ export default async function RequestPage(props: PageProps<"/request/[id]">) {
             </p>
           )}
           {request.quoteNote && <p className="mt-4 whitespace-pre-wrap">{request.quoteNote}</p>}
-          <p className="mt-4 text-sm text-ink-soft">
-            {request.status === "accepted"
-              ? "Great, we're on it!"
-              : "Like it? Just reply to us by text or email and we'll get started."}
-          </p>
+          {request.status === "quoted" ? (
+            <>
+              <p className="mt-4 text-sm text-ink-soft">Like it? Accept the quote and we&apos;ll get started. No payment is taken online.</p>
+              <QuoteAnswer id={request.id} total={total} />
+            </>
+          ) : (
+            <p className="mt-4 text-sm font-semibold">You accepted this quote. Great, we&apos;re on it! We&apos;ll be in touch about payment and pickup.</p>
+          )}
         </section>
       ) : (
         <section className="chunky mt-8 rounded-[var(--radius-blob)] bg-sky-soft p-6">

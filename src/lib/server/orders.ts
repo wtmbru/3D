@@ -1,3 +1,4 @@
+import { likeLiteral } from "@/lib/lookup";
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { cache } from "react";
@@ -246,6 +247,20 @@ export async function getOrderById(id: string): Promise<Order | undefined> {
   const { data, error } = await supabaseAdmin().from("orders").select("*").eq("id", id).maybeSingle();
   throwIfError(error, "Loading the order");
   return data ? fromRow(data as Row) : undefined;
+}
+
+/** All orders placed with this email. Callers must still check the other contact details. */
+export async function listOrdersByEmail(email: string): Promise<Order[]> {
+  const e = email.trim().toLowerCase();
+  if (backend() === "memory") return mem().orders.filter((o) => o.email.toLowerCase() === e);
+  const { data, error } = await supabaseAdmin()
+    .from("orders")
+    .select("*")
+    .ilike("email", likeLiteral(e))
+    .order("created_at", { ascending: false })
+    .limit(50);
+  throwIfError(error, "Finding orders");
+  return (data as Row[]).map(fromRow);
 }
 
 export async function updateOrder(id: string, patch: OrderPatch): Promise<Order | undefined> {

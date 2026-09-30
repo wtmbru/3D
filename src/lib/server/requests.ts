@@ -1,5 +1,6 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
+import { likeLiteral } from "@/lib/lookup";
 import { colorsSummary, type CustomRequest, type RequestColor, type RequestStatus } from "@/lib/requests";
 import { isSupabaseConfigured, supabaseAdmin } from "./supabase";
 
@@ -159,6 +160,39 @@ export async function updateRequest(id: string, patch: RequestPatch): Promise<Cu
   if (patch.adminNotes !== undefined) row.admin_notes = patch.adminNotes || null;
   const { data, error } = await supabaseAdmin().from("custom_requests").update(row).eq("id", id).select("*").maybeSingle();
   check(error, "Updating the request");
+  return data ? fromRow(data as Row) : undefined;
+}
+
+/** All requests sent with this email. Callers must still check the other contact details. */
+export async function listRequestsByEmail(email: string): Promise<CustomRequest[]> {
+  const e = email.trim().toLowerCase();
+  if (backend() === "memory") return mem().list.filter((x) => x.email.toLowerCase() === e);
+  const { data, error } = await supabaseAdmin()
+    .from("custom_requests")
+    .select("*")
+    .ilike("email", likeLiteral(e))
+    .order("created_at", { ascending: false })
+    .limit(50);
+  check(error, "Finding requests");
+  return (data as Row[]).map(fromRow);
+}
+
+/** The customer's answer to a quote. Only works while the request is still waiting on that answer. */
+export async function respondToQuote(id: string, decision: "accepted" | "declined"): Promise<CustomRequest | undefined> {
+  if (backend() === "memory") {
+    const x = mem().list.find((q) => q.id === id);
+    if (!x || x.status !== "quoted") return undefined;
+    x.status = decision;
+    return x;
+  }
+  const { data, error } = await supabaseAdmin()
+    .from("custom_requests")
+    .update({ status: decision })
+    .eq("id", id)
+    .eq("status", "quoted") // if the shop changed things meanwhile, this matches nothing
+    .select("*")
+    .maybeSingle();
+  check(error, "Saving your answer");
   return data ? fromRow(data as Row) : undefined;
 }
 
