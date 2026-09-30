@@ -188,6 +188,14 @@ export function RequestDetail({ request }: { request: CustomRequest }) {
                 </button>
               )}
             </div>
+            {view.status === "accepted" && request.orderId && (
+              <p className="mt-3 rounded-xl bg-mint-soft px-3 py-2 text-sm font-semibold">
+                Accepted and turned into an order.{" "}
+                <Link href={`/admin/orders/${request.orderId}`} className="underline decoration-2 underline-offset-2">
+                  Open the order →
+                </Link>
+              </p>
+            )}
             <p className="admin-hint">
               Saving doesn&apos;t send anything by itself. Use <strong>Copy message to send</strong> to text or email them, or they can check their page.
             </p>

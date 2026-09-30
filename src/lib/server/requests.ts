@@ -20,6 +20,7 @@ type Row = {
   message: string;
   quantity: number;
   colors?: RequestColor[]; // absent until migration 0005 has been run
+  order_id?: string | null; // absent until migration 0006 has been run
   status: RequestStatus;
   quote_price: string | number | null;
   quote_note: string | null;
@@ -38,6 +39,7 @@ const fromRow = (r: Row): CustomRequest => ({
   message: r.message,
   quantity: r.quantity,
   colors: r.colors ?? [],
+  ...(r.order_id ? { orderId: r.order_id } : {}),
   status: r.status,
   ...(r.quote_price !== null ? { quotePrice: Number(r.quote_price) } : {}),
   ...(r.quote_note ? { quoteNote: r.quote_note } : {}),
@@ -194,6 +196,17 @@ export async function respondToQuote(id: string, decision: "accepted" | "decline
     .maybeSingle();
   check(error, "Saving your answer");
   return data ? fromRow(data as Row) : undefined;
+}
+
+/** Remember which order a request became. */
+export async function linkRequestOrder(id: string, orderId: string): Promise<void> {
+  if (backend() === "memory") {
+    const x = mem().list.find((q) => q.id === id);
+    if (x) x.orderId = orderId;
+    return;
+  }
+  const { error } = await supabaseAdmin().from("custom_requests").update({ order_id: orderId }).eq("id", id);
+  if (error) throw new Error(error.message);
 }
 
 export async function deleteRequest(id: string): Promise<void> {

@@ -33,6 +33,8 @@ export interface CustomRequest {
   modelUrl: string;
   message: string;
   quantity: number;
+  /** The order this became once the customer accepted the quote. */
+  orderId?: string;
   /** Colors picked from what's in stock (may be empty). */
   colors: RequestColor[];
   status: RequestStatus;

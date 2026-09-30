@@ -66,7 +66,14 @@ export default async function RequestPage(props: PageProps<"/request/[id]">) {
               <QuoteAnswer id={request.id} total={total} />
             </>
           ) : (
-            <p className="mt-4 text-sm font-semibold">You accepted this quote. Great, we&apos;re on it! We&apos;ll be in touch about payment and pickup.</p>
+            <>
+              <p className="mt-4 text-sm font-semibold">You accepted this quote. Great, we&apos;re on it!</p>
+              {request.orderId && (
+                <Link href={`/order/${request.orderId}`} className="btn btn-primary btn-sm mt-3">
+                  See your order and how to pay
+                </Link>
+              )}
+            </>
           )}
         </section>
       ) : (

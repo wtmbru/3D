@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { answerQuote } from "@/app/(store)/request/[id]/actions";
+import { PAYMENT_METHODS } from "@/lib/orders";
 import { formatPrice } from "@/lib/pricing";
 
 /** Accept or decline the quote, with a confirm step so a stray tap can't commit anyone. */
@@ -10,15 +11,22 @@ export function QuoteAnswer({ id, total }: { id: string; total: number }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [ask, setAsk] = useState<"accepted" | "declined" | null>(null);
+  const [payment, setPayment] = useState<string>("");
   const [error, setError] = useState<string | null>(null);
 
   function send(decision: "accepted" | "declined") {
     setError(null);
     start(async () => {
-      const res = await answerQuote(id, decision);
-      if (!res.ok) setError(res.error);
-      setAsk(null);
-      router.refresh();
+      const res = await answerQuote(id, decision, decision === "accepted" ? payment : undefined);
+      if (!res.ok) {
+        setError(res.error);
+        setAsk(null);
+        router.refresh();
+        return;
+      }
+      // Accepting makes an order: take them to it for the payment details.
+      if (res.orderId) router.push(`/order/${res.orderId}`);
+      else router.refresh();
     });
   }
 
@@ -38,12 +46,29 @@ export function QuoteAnswer({ id, total }: { id: string; total: number }) {
           <p className="font-display text-lg font-extrabold">
             {ask === "accepted" ? `Accept this quote for ${formatPrice(total)}?` : "Decline this quote?"}
           </p>
-          <p className="mt-1 text-sm text-ink-soft">
-            {ask === "accepted" ? "We'll get started and be in touch about payment and pickup." : "We'll let it go. You can always send a new request."}
-          </p>
+          {ask === "accepted" ? (
+            <fieldset className="mt-3">
+              <legend className="text-sm text-ink-soft">How will you pay? You won&apos;t pay online. We&apos;ll show you where to send it next.</legend>
+              <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label="Payment method">
+                {PAYMENT_METHODS.map((m) => (
+                  <label
+                    key={m.id}
+                    className={`focus-within:ring-sky cursor-pointer rounded-full border-2 px-4 py-1.5 font-display font-bold focus-within:ring-[3px] ${
+                      payment === m.id ? "border-ink bg-sun" : "border-ink/25 bg-paper"
+                    }`}
+                  >
+                    <input type="radio" name="payment" value={m.id} checked={payment === m.id} onChange={() => setPayment(m.id)} className="sr-only" />
+                    {m.label}
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+          ) : (
+            <p className="mt-1 text-sm text-ink-soft">We&apos;ll let it go. You can always send a new request.</p>
+          )}
           <div className="mt-3 flex flex-wrap gap-3">
-            <button type="button" className="btn btn-primary btn-sm" disabled={pending} onClick={() => send(ask)}>
-              {pending ? "Saving…" : ask === "accepted" ? "Yes, accept" : "Yes, decline"}
+            <button type="button" className="btn btn-primary btn-sm" disabled={pending || (ask === "accepted" && !payment)} onClick={() => send(ask)}>
+              {pending ? "Saving…" : ask === "accepted" ? "Yes, accept and place my order" : "Yes, decline"}
             </button>
             <button type="button" className="btn btn-secondary btn-sm" disabled={pending} onClick={() => setAsk(null)}>
               Go back
