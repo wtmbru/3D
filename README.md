@@ -189,3 +189,9 @@ At checkout, and when a customer accepts a custom quote, they choose **local pic
 
 Filaments can be deleted straight from the list (a colour used as a product default or in a palette is refused with an explanation; mark it out of stock instead).
 
+## Booth sales (selling in person)
+
+**Admin → Booth** (also a card on the dashboard) tracks local sales, built for using on a phone at a booth. Start a **booth day** (e.g. "Saturday market"), then **add each item once** with what you're selling it for and what it costs to make (typing a name she has sold before, or one of her shop products, fills in its price and cost). From then on it's just big **+1 / +2 / +3 / +5** buttons (and −1) per item. The totals at the top update instantly: **sales, cost and profit**, plus items sold. The Booth page lists every booth day with its totals and an all-time sum. An item can be edited (name, price, cost) or removed, and a whole booth day can be deleted.
+
+It's built for a weak booth signal: every tap shows immediately and is sent in the background. If there's no signal, the page says "N changes not saved yet", keeps them on the phone (even through a reload) and sends them by itself when the signal returns. Saving is idempotent (each item is sent as it is, not as "+1"), so retries can't double-count. The page itself does need a signal to *open*, so open it before you head into a dead zone. Run `supabase/migrations/0011_booth_sales.sql` to set it up. Cost per item is whatever she enters (the Weight & cost card in the product editor can help estimate it).
+

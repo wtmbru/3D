@@ -49,6 +49,14 @@ export default async function Dashboard() {
         ))}
       </div>
 
+      <Link href="/admin/booth" className="chunky focus-ring mt-8 flex items-center justify-between gap-4 rounded-3xl bg-mint-soft p-5 transition-transform hover:-translate-y-0.5">
+        <span>
+          <span className="block font-display text-xl font-extrabold">Selling at a booth? 🛍️</span>
+          <span className="mt-1 block text-sm font-semibold text-ink-soft">Track in-person sales, costs and profit with quick +1 / +2 / +3 taps.</span>
+        </span>
+        <span className="btn btn-primary btn-sm shrink-0">Open</span>
+      </Link>
+
       <h2 className="mt-10 font-display text-xl font-extrabold">Shop</h2>
       <div className="mt-3 grid grid-cols-2 gap-4 lg:grid-cols-4">
         {stats.map((s) => (
