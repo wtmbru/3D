@@ -168,6 +168,8 @@ export interface NewOrder {
   items: OrderItem[];
   total: number;
   ipHash?: string;
+  /** Use this number (an order made from a custom request keeps the request's number). Falls back to the next free one. */
+  number?: number;
 }
 
 /** Fields an admin may change. */
@@ -194,12 +196,18 @@ function throwIfError(error: { message: string } | null, what: string) {
   throw new Error(`${what} failed: ${error.message}`);
 }
 
+/** Dev-only: the next number, shared with custom requests the way the database counter is. */
+export function nextMemoryNumber(): number {
+  return ++mem().seq;
+}
+
 export async function insertOrder(o: NewOrder): Promise<Order> {
   if (backend() === "memory") {
     const m = mem();
+    const taken = o.number !== undefined && m.orders.some((x) => x.number === o.number);
     const order: Order & { ipHash?: string } = {
       id: randomUUID(),
-      number: ++m.seq,
+      number: o.number !== undefined && !taken ? o.number : ++m.seq,
       createdAt: new Date().toISOString(),
       name: o.name,
       email: o.email,
@@ -215,20 +223,22 @@ export async function insertOrder(o: NewOrder): Promise<Order> {
     m.orders.unshift(order);
     return order;
   }
-  const { data, error } = await supabaseAdmin()
-    .from("orders")
-    .insert({
-      customer_name: o.name,
-      email: o.email,
-      phone: o.phone,
-      payment_method: o.payment,
-      notes: o.notes || null,
-      items: o.items,
-      total: o.total,
-      ip_hash: o.ipHash ?? null,
-    })
-    .select("*")
-    .single();
+  const row = {
+    customer_name: o.name,
+    email: o.email,
+    phone: o.phone,
+    payment_method: o.payment,
+    notes: o.notes || null,
+    items: o.items,
+    total: o.total,
+    ip_hash: o.ipHash ?? null,
+  };
+  const insert = (extra: object) => supabaseAdmin().from("orders").insert({ ...row, ...extra }).select("*").single();
+  let { data, error } = await insert(o.number !== undefined ? { number: o.number } : {});
+  if (error && o.number !== undefined && error.code === "23505") {
+    // That number is already an order (e.g. an older request): take the next free one instead.
+    ({ data, error } = await insert({}));
+  }
   throwIfError(error, "Saving the order");
   return fromRow(data as Row);
 }

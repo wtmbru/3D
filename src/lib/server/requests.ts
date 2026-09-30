@@ -2,6 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { likeLiteral } from "@/lib/lookup";
 import { colorsSummary, type CustomRequest, type RequestColor, type RequestStatus } from "@/lib/requests";
+import { nextMemoryNumber } from "./orders";
 import { isSupabaseConfigured, supabaseAdmin } from "./supabase";
 
 /*
@@ -88,7 +89,7 @@ export async function insertRequest(r: NewRequest): Promise<CustomRequest> {
     const m = mem();
     const req: CustomRequest & { ipHash?: string } = {
       id: randomUUID(),
-      number: ++m.seq,
+      number: nextMemoryNumber(),
       createdAt: new Date().toISOString(),
       name: r.name,
       email: r.email,

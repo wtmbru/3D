@@ -15,6 +15,7 @@ export function orderFromRequest(r: CustomRequest, payment: PaymentMethod): NewO
     email: r.email,
     phone: r.phone,
     payment,
+    number: r.number,
     notes: `${head}${r.message}`.slice(0, 1000),
     items: [
       {
