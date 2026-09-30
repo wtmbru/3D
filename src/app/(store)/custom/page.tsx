@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { CustomRequestForm } from "@/components/custom/CustomRequestForm";
+import { pageMeta } from "@/lib/meta";
 
-export const metadata: Metadata = {
-  title: "Custom print",
-  description: "Found a print you love? Send us the link and tell us your colors. We'll reply with a price.",
-};
+export const metadata: Metadata = pageMeta(
+  "Custom print",
+  "Found a print you love? Send us the link and tell us your colors. We'll reply with a price.",
+  "/custom",
+);
 
 export default function CustomPage() {
   return (

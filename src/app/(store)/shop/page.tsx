@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { ProductCard } from "@/components/ProductCard";
 import { categories } from "@/data/constants";
+import { pageMeta } from "@/lib/meta";
 import { getProducts } from "@/lib/server/catalog";
 
-export const metadata: Metadata = { title: "Shop" };
+export const metadata: Metadata = pageMeta("Shop", "Browse playful 3D-printed goods. Pick a design and choose every color yourself.", "/shop");
 
 export default async function ShopPage(props: PageProps<"/shop">) {
   const { category } = await props.searchParams;

@@ -5,12 +5,20 @@ import { Configurator } from "@/components/configurator/Configurator";
 import { ProductCard } from "@/components/ProductCard";
 import { categories } from "@/data/constants";
 import { parseDesign } from "@/lib/config";
+import { pageMeta } from "@/lib/meta";
+import { formatPrice } from "@/lib/pricing";
 import { getCatalog, getProductBySlug, getProducts } from "@/lib/server/catalog";
 
 export async function generateMetadata(props: PageProps<"/product/[slug]">): Promise<Metadata> {
   const { slug } = await props.params;
   const product = await getProductBySlug(slug);
-  return product ? { title: product.name, description: product.tagline } : {};
+  if (!product) return {};
+  // The preview picture comes from this folder's opengraph-image.tsx.
+  return pageMeta(
+    product.name,
+    `${product.tagline} From ${formatPrice(product.basePrice)}. Pick your colors and we'll print it just for you.`,
+    `/product/${product.slug}`,
+  );
 }
 
 export default async function ProductPage(props: PageProps<"/product/[slug]">) {

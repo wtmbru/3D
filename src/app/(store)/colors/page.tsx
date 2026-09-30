@@ -1,11 +1,12 @@
 import type { Metadata } from "next";
 import { swatchBackground } from "@/components/Swatch";
 import { finishLabels } from "@/data/constants";
+import { pageMeta } from "@/lib/meta";
 import { getCatalog } from "@/lib/server/catalog";
 import { formatPrice } from "@/lib/pricing";
 import type { Filament } from "@/lib/types";
 
-export const metadata: Metadata = { title: "Filament colors" };
+export const metadata: Metadata = pageMeta("Filament colors", "Every filament color we print with, in PLA, PETG and TPU, from basic to silk and sparkle.", "/colors");
 
 export default async function ColorsPage() {
   const { filaments, materials } = await getCatalog();

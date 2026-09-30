@@ -1,10 +1,12 @@
 import type { Metadata } from "next";
 import { TrackForm } from "@/components/TrackForm";
+import { pageMeta } from "@/lib/meta";
 
-export const metadata: Metadata = {
-  title: "Track your order",
-  description: "Find your order or custom print request with your email and phone number or name.",
-};
+export const metadata: Metadata = pageMeta(
+  "Track your order",
+  "Find your order or custom print request with your email and phone number or name.",
+  "/track",
+);
 
 export default function TrackPage() {
   return (

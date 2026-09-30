@@ -19,7 +19,10 @@ import {
   type OrderStatus,
   type PaymentStatus,
 } from "@/lib/orders";
+import { defaultTextKind, orderText, TEXT_KINDS, type TextKind } from "@/lib/orderTexts";
 import { formatPrice, getFilament } from "@/lib/pricing";
+import { smsLink } from "@/lib/sms";
+import { useHydrated } from "@/lib/useHydrated";
 import type { Product } from "@/lib/types";
 import { removeOrder, saveOrderNotes, setOrderItemStatus, setOrderStatus, setPaymentStatus } from "../../../order-actions";
 import { Notice, useNotice } from "../../ui";
@@ -45,6 +48,10 @@ export function OrderDetail({
   // What's being typed in the notes box; otherwise it shows the saved note.
   const [draft, setDraft] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
+  // The text to send: which kind, and her edits (otherwise the ready-made wording).
+  const [textKind, setTextKind] = useState<TextKind | null>(null);
+  const [textDraft, setTextDraft] = useState<string | null>(null);
+  const hydrated = useHydrated();
 
   function save(patch: Partial<Order>, action: () => Promise<{ ok: boolean; error?: string }>) {
     start(async () => {
@@ -69,6 +76,11 @@ export function OrderDetail({
     }
   }
 
+  const kind = textKind ?? defaultTextKind(view);
+  // The customer's page address depends on where this admin is open, so it's only known after loading.
+  const textBody =
+    textDraft ??
+    orderText(kind, view, { trackingUrl: hydrated ? `${window.location.origin}/order/${order.id}` : "", methodLabel, handle: handle || undefined });
   const cancelled = view.status === "cancelled";
   const done = view.items.filter((i) => i.status === "done").length;
 
@@ -240,6 +252,36 @@ export function OrderDetail({
                 <p className="mt-0.5 whitespace-pre-wrap">{order.notes}</p>
               </div>
             )}
+          </section>
+
+          <section className="admin-card" aria-label="Text the customer">
+            <h2 className="admin-h2">Text {order.name.split(" ")[0]}</h2>
+            <div className="mt-3">
+              <Segmented
+                label="Message"
+                options={TEXT_KINDS}
+                value={kind}
+                onChange={(k) => {
+                  setTextKind(k);
+                  setTextDraft(null);
+                }}
+                wrap
+              />
+            </div>
+            <label className="mt-3 block">
+              <span className="sr-only">Message to send</span>
+              <textarea className="admin-input min-h-28" maxLength={600} value={textBody} onChange={(e) => setTextDraft(e.target.value)} />
+            </label>
+            <div className="mt-3 flex flex-wrap items-center gap-3">
+              {/* Opens Messages (iPhone, or a Mac signed in to Messages) with the number and text ready to send. */}
+              <button type="button" className="btn btn-primary btn-sm" disabled={!hydrated || !textBody.trim()} onClick={() => (window.location.href = smsLink(order.phone, textBody))}>
+                Open in Messages
+              </button>
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => copy(textBody, "text")}>
+                {copied === "text" ? "Copied!" : "Copy text"}
+              </button>
+            </div>
+            <p className="admin-hint">Opens Messages with {order.phone} and this text ready. Nothing is sent until you press send.</p>
           </section>
 
           <section className="admin-card" aria-label="Your notes">
