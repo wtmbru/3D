@@ -370,7 +370,12 @@ function Segmented<T extends string>({
   wrap?: boolean;
 }) {
   return (
-    <div role="radiogroup" aria-label={label} className={`inline-flex rounded-full border-2 border-ink p-0.5 ${wrap ? "flex w-full flex-wrap" : ""}`}>
+    <div
+      role="radiogroup"
+      aria-label={label}
+      // Wrapped mode is for narrow cards with many options: separate pills in a grid, since one outlined pill can't wrap neatly.
+      className={wrap ? "grid grid-cols-2 gap-2" : "inline-flex rounded-full border-2 border-ink p-0.5"}
+    >
       {options.map((o) => {
         const on = o.id === value;
         return (
@@ -381,8 +386,8 @@ function Segmented<T extends string>({
             aria-checked={on}
             disabled={disabled}
             onClick={() => !on && onChange(o.id)}
-            className={`rounded-full px-3 py-1 text-sm font-bold transition-colors disabled:opacity-40 ${wrap ? "flex-1" : ""} ${
-              on ? "bg-ink text-cream" : "hover:bg-cream-deep"
+            className={`rounded-full px-3 py-1 text-sm font-bold transition-colors disabled:opacity-40 ${
+              wrap ? `border-2 border-ink py-1.5 ${on ? "bg-ink text-cream" : "bg-paper hover:bg-cream-deep"}` : on ? "bg-ink text-cream" : "hover:bg-cream-deep"
             }`}
           >
             {o.label}

@@ -230,7 +230,7 @@ export function RequestDetail({ request }: { request: CustomRequest }) {
 
           <section className="admin-card" aria-label="Status">
             <h2 className="admin-h2">Status</h2>
-            <div role="radiogroup" aria-label="Request status" className="mt-3 flex w-full flex-wrap rounded-full border-2 border-ink p-0.5">
+            <div role="radiogroup" aria-label="Request status" className="mt-3 grid grid-cols-2 gap-2">
               {REQUEST_STATUSES.map((s) => {
                 const on = s.id === view.status;
                 return (
@@ -240,7 +240,7 @@ export function RequestDetail({ request }: { request: CustomRequest }) {
                     role="radio"
                     aria-checked={on}
                     onClick={() => !on && save({ status: s.id as RequestStatus }, () => setRequestStatus(request.id, s.id))}
-                    className={`flex-1 rounded-full px-2.5 py-1 text-sm font-bold transition-colors ${on ? "bg-ink text-cream" : "hover:bg-cream-deep"}`}
+                    className={`rounded-full border-2 border-ink px-2.5 py-1.5 text-sm font-bold transition-colors ${on ? "bg-ink text-cream" : "bg-paper hover:bg-cream-deep"}`}
                   >
                     {s.label}
                   </button>
