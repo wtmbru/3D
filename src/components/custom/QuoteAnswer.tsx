@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { answerQuote } from "@/app/(store)/request/[id]/actions";
 import { DeliveryFields, EMPTY_ADDRESS, toAddress, type AddressDraft } from "@/components/DeliveryFields";
-import { shippingFeeFor, type DeliveryMethod, type DeliverySettings } from "@/lib/delivery";
+import { shippingFeeFor, type DeliveryMethod, type DeliverySettings, type ShippingAddress } from "@/lib/delivery";
 import { PAYMENT_METHODS } from "@/lib/orders";
 import { formatPrice } from "@/lib/pricing";
 
@@ -14,19 +14,22 @@ export function QuoteAnswer({
   total: quoteTotal,
   delivery: deliverySettings,
   initialDelivery,
+  initialAddress,
 }: {
   id: string;
   total: number;
   delivery: DeliverySettings;
   /** What they asked for when they sent the request. */
   initialDelivery: DeliveryMethod;
+  /** The address they gave with the request, to confirm or correct. */
+  initialAddress?: ShippingAddress;
 }) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [ask, setAsk] = useState<"accepted" | "declined" | null>(null);
   const [payment, setPayment] = useState<string>("");
   const [delivery, setDelivery] = useState<DeliveryMethod>(initialDelivery);
-  const [address, setAddress] = useState<AddressDraft>(EMPTY_ADDRESS);
+  const [address, setAddress] = useState<AddressDraft>(() => ({ ...EMPTY_ADDRESS, ...initialAddress }));
   const total = quoteTotal + shippingFeeFor(delivery, deliverySettings);
   const [error, setError] = useState<string | null>(null);
 

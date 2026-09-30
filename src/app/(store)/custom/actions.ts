@@ -4,6 +4,7 @@ import { createHash } from "node:crypto";
 import { after } from "next/server";
 import { z } from "zod";
 import { MAX_REQUEST_COLORS } from "@/data/constants";
+import { shippingAddressSchema } from "@/lib/delivery";
 import { parseLink, type RequestColor } from "@/lib/requests";
 import { clientIp } from "@/lib/server/auth";
 import { getCatalog } from "@/lib/server/catalog";
@@ -19,6 +20,8 @@ const requestSchema = z.object({
   /** Filament ids the customer picked. Names and colors come from the catalog, never from the browser. */
   colorIds: z.array(z.string().max(60)).max(MAX_REQUEST_COLORS, `Please pick up to ${MAX_REQUEST_COLORS} colors.`).default([]),
   delivery: z.enum(["pickup", "shipping"]).default("pickup"),
+  /** Required when they want shipping, so the quote can account for the destination. */
+  shippingAddress: shippingAddressSchema.optional(),
   quantity: z.number().int("Please enter a whole number.").min(1, "Quantity must be at least 1.").max(500, "Quantity is too high. Tell us in the message and we'll work it out."),
   name: z.string().trim().min(1, "Please enter your name.").max(80),
   email: z.string().trim().email("Please enter a valid email address.").max(200),
@@ -42,6 +45,7 @@ export async function submitRequest(input: SubmitRequestInput): Promise<SubmitRe
   if (!parsed.success) return { ok: false, error: parsed.error.issues[0]?.message ?? "Please check your details." };
   const data = parsed.data;
   if (data.website) return { ok: false, error: "Something went wrong. Please try again." };
+  if (data.delivery === "shipping" && !data.shippingAddress) return { ok: false, error: "Please enter your shipping address." };
 
   const link = parseLink(data.link);
   if (!link) return { ok: false, error: "That doesn't look like a web link. Paste the address of the print's page, starting with https://" };
@@ -72,6 +76,7 @@ export async function submitRequest(input: SubmitRequestInput): Promise<SubmitRe
       quantity: data.quantity,
       colors,
       delivery: data.delivery,
+      ...(data.delivery === "shipping" ? { shippingAddress: data.shippingAddress } : {}),
       ipHash,
     });
     // Tell her after the customer has their confirmation, so a slow email service never delays them.

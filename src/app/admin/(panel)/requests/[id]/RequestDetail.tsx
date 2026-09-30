@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useOptimistic, useState, useTransition } from "react";
 import { swatchBackground } from "@/components/Swatch";
 import { formatPrice } from "@/lib/pricing";
+import { addressText } from "@/lib/delivery";
 import { smsLink } from "@/lib/sms";
 import { parseLink, REQUEST_STATUSES, replyText, requestLabel, type CustomRequest, type RequestStatus } from "@/lib/requests";
 import { removeRequest, saveRequestNotes, sendQuote, setRequestStatus } from "../../../request-actions";
@@ -131,6 +132,15 @@ export function RequestDetail({ request }: { request: CustomRequest }) {
               <strong>{request.delivery === "shipping" ? "Wants shipping 📦" : "Local pickup"}</strong>
               {request.delivery === "shipping" && <span className="text-ink-soft"> (the shipping fee from Settings is added when they accept)</span>}
             </p>
+            {request.delivery === "shipping" && request.shippingAddress && (
+              <div className="mt-2 rounded-xl bg-sky-soft px-3 py-2 text-sm">
+                <p className="text-xs font-bold tracking-wide text-ink-soft uppercase">Ship to</p>
+                <p className="mt-0.5 whitespace-pre-line">{addressText(request.shippingAddress)}</p>
+                <button type="button" className="mt-2 text-xs font-semibold underline decoration-2 underline-offset-2" onClick={() => copy(`${request.name}\n${addressText(request.shippingAddress!)}`, "address")}>
+                  {copied === "address" ? "Copied!" : "Copy address"}
+                </button>
+              </div>
+            )}
           </section>
 
           <section className="admin-card" aria-label="Customer">

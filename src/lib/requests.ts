@@ -12,7 +12,7 @@ export const REQUEST_STATUSES: { id: RequestStatus; label: string; tone: string;
   { id: "declined", label: "Declined", tone: "bg-cream-deep", hint: "Won't be made" },
 ];
 
-import type { DeliveryMethod } from "./delivery";
+import type { DeliveryMethod, ShippingAddress } from "./delivery";
 import type { Filament } from "./types";
 
 /** A color the customer picked, saved as it was at the time. */
@@ -36,6 +36,8 @@ export interface CustomRequest {
   quantity: number;
   /** What they asked for when sending the request; the address comes when they accept. */
   delivery: DeliveryMethod;
+  /** Where to ship it, when they want shipping. */
+  shippingAddress?: ShippingAddress;
   /** The order this became once the customer accepted the quote. */
   orderId?: string;
   /** Colors picked from what's in stock (may be empty). */

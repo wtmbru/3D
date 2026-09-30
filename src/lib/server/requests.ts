@@ -1,7 +1,7 @@
 import "server-only";
 import { randomUUID } from "node:crypto";
 import { likeLiteral } from "@/lib/lookup";
-import type { DeliveryMethod } from "@/lib/delivery";
+import { addressText, type DeliveryMethod, type ShippingAddress } from "@/lib/delivery";
 import { colorsSummary, type CustomRequest, type RequestColor, type RequestStatus } from "@/lib/requests";
 import { nextMemoryNumber } from "./orders";
 import { isSupabaseConfigured, supabaseAdmin } from "./supabase";
@@ -23,6 +23,7 @@ type Row = {
   quantity: number;
   colors?: RequestColor[]; // absent until migration 0005 has been run
   delivery?: DeliveryMethod; // absent until migration 0009 has been run
+  shipping_address?: ShippingAddress | null; // absent until migration 0010 has been run
   order_id?: string | null; // absent until migration 0006 has been run
   status: RequestStatus;
   quote_price: string | number | null;
@@ -43,6 +44,7 @@ const fromRow = (r: Row): CustomRequest => ({
   quantity: r.quantity,
   colors: r.colors ?? [],
   delivery: r.delivery ?? "pickup",
+  ...(r.shipping_address ? { shippingAddress: r.shipping_address } : {}),
   ...(r.order_id ? { orderId: r.order_id } : {}),
   status: r.status,
   ...(r.quote_price !== null ? { quotePrice: Number(r.quote_price) } : {}),
@@ -60,6 +62,7 @@ export interface NewRequest {
   quantity: number;
   colors?: RequestColor[];
   delivery?: DeliveryMethod;
+  shippingAddress?: ShippingAddress;
   ipHash?: string;
 }
 
@@ -103,6 +106,7 @@ export async function insertRequest(r: NewRequest): Promise<CustomRequest> {
       quantity: r.quantity,
       colors: r.colors ?? [],
       delivery: r.delivery ?? "pickup",
+      ...(r.shippingAddress ? { shippingAddress: r.shippingAddress } : {}),
       status: "new",
       ipHash: r.ipHash,
     };
@@ -124,12 +128,12 @@ export async function insertRequest(r: NewRequest): Promise<CustomRequest> {
     ...base,
     message: r.message,
     ...(colors.length ? { colors } : {}),
-    ...(shipping ? { delivery: "shipping" } : {}),
+    ...(shipping ? { delivery: "shipping", shipping_address: r.shippingAddress } : {}),
   });
-  if (error && (colors.length || shipping) && /colors|delivery/.test(error.message)) {
+  if (error && (colors.length || shipping) && /colors|delivery|shipping_address/.test(error.message)) {
     // A newer column (migration 0005 or 0009) isn't there yet. Don't lose the request or the
     // customer's choices: keep them in the message instead.
-    const notes = [colors.length ? `Colors chosen: ${colorsSummary(colors)}` : "", shipping ? "Delivery: they'd like it shipped" : ""].filter(Boolean);
+    const notes = [colors.length ? `Colors chosen: ${colorsSummary(colors)}` : "", shipping ? `Ship to:\n${r.shippingAddress ? addressText(r.shippingAddress) : "(no address given)"}` : ""].filter(Boolean);
     ({ data, error } = await insert({ ...base, message: `${r.message}\n\n${notes.join("\n")}`.slice(0, 3000) }));
   }
   check(error, "Saving the request");

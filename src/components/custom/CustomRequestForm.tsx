@@ -3,8 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { submitRequest } from "@/app/(store)/custom/actions";
-import { DELIVERY_METHODS, type DeliveryMethod, type DeliverySettings } from "@/lib/delivery";
-import { formatPrice } from "@/lib/pricing";
+import { DeliveryFields, EMPTY_ADDRESS, toAddress, type AddressDraft } from "@/components/DeliveryFields";
+import type { DeliveryMethod, DeliverySettings } from "@/lib/delivery";
 import { parseLink } from "@/lib/requests";
 import { useHydrated } from "@/lib/useHydrated";
 import { ColorPicker } from "./ColorPicker";
@@ -20,6 +20,7 @@ export function CustomRequestForm({ delivery: deliverySettings }: { delivery: De
   const [link, setLink] = useState("");
   const [colorIds, setColorIds] = useState<string[]>([]);
   const [delivery, setDelivery] = useState<DeliveryMethod>("pickup");
+  const [address, setAddress] = useState<AddressDraft>(EMPTY_ADDRESS);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const ready = useHydrated();
@@ -34,6 +35,7 @@ export function CustomRequestForm({ delivery: deliverySettings }: { delivery: De
         link,
         colorIds,
         delivery,
+        ...(delivery === "shipping" ? { shippingAddress: toAddress(address) } : {}),
         message: String(form.get("message") ?? ""),
         quantity: Number(form.get("quantity") ?? 1),
         name: String(form.get("name") ?? ""),
@@ -89,31 +91,13 @@ export function CustomRequestForm({ delivery: deliverySettings }: { delivery: De
             <span className="admin-label">How many?</span>
             <input name="quantity" type="number" min={1} max={500} defaultValue={1} required className="admin-input" />
           </label>
-          <fieldset className="mt-4">
-            <legend className="admin-label">How would you like to get it?</legend>
-            <div className="mt-1 grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label="Pickup or shipping">
-              {DELIVERY_METHODS.map((m) => {
-                const on = delivery === m.id;
-                return (
-                  <label
-                    key={m.id}
-                    className={`focus-within:ring-sky cursor-pointer rounded-2xl border-2 p-3 text-center transition-transform hover:-translate-y-0.5 focus-within:ring-[3px] ${
-                      on ? "border-ink bg-sun shadow-[var(--shadow-pop-sm)]" : "border-ink/20 bg-paper"
-                    }`}
-                  >
-                    <input type="radio" name="delivery" value={m.id} checked={on} onChange={() => setDelivery(m.id)} className="sr-only" />
-                    <span className="block font-display font-extrabold">{m.label}</span>
-                    <span className="block text-xs text-ink-soft">
-                      {m.id === "pickup" ? "Free" : deliverySettings.shippingFee > 0 ? `+${formatPrice(deliverySettings.shippingFee)} shipping` : "Free shipping"}
-                    </span>
-                  </label>
-                );
-              })}
+          <div className="mt-4">
+            <span className="admin-label">How would you like to get it?</span>
+            <div className="mt-1">
+              <DeliveryFields idPrefix="request-delivery" method={delivery} onMethod={setDelivery} address={address} onAddress={setAddress} settings={deliverySettings} />
             </div>
-            <span className="admin-hint">
-              {delivery === "shipping" ? "We'll ask for your address once you accept the quote." : deliverySettings.pickupNote || "We'll arrange a pickup time and place with you."}
-            </span>
-          </fieldset>
+            {delivery === "shipping" && <p className="admin-hint">We use your address to work out the price, so it&apos;s included in your quote.</p>}
+          </div>
         </section>
 
         <section>

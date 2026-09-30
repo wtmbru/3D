@@ -5,6 +5,7 @@ import { swatchBackground } from "@/components/Swatch";
 import { site } from "@/config/site";
 import { linkHost, REQUEST_STATUSES, requestLabel } from "@/lib/requests";
 import { formatPrice } from "@/lib/pricing";
+import { addressLines } from "@/lib/delivery";
 import { QuoteAnswer } from "@/components/custom/QuoteAnswer";
 import { getRequestById } from "@/lib/server/requests";
 import { getDeliverySettings } from "@/lib/server/settings";
@@ -64,7 +65,7 @@ export default async function RequestPage(props: PageProps<"/request/[id]">) {
           {request.status === "quoted" ? (
             <>
               <p className="mt-4 text-sm text-ink-soft">Like it? Accept the quote and we&apos;ll get started. No payment is taken online.</p>
-              <QuoteAnswer id={request.id} total={total} delivery={await getDeliverySettings()} initialDelivery={request.delivery} />
+              <QuoteAnswer id={request.id} total={total} delivery={await getDeliverySettings()} initialDelivery={request.delivery} initialAddress={request.shippingAddress} />
             </>
           ) : (
             <>
@@ -142,7 +143,22 @@ export default async function RequestPage(props: PageProps<"/request/[id]">) {
           )}
           <div>
             <dt className="font-semibold text-ink-soft">Pickup or shipping</dt>
-            <dd>{request.delivery === "shipping" ? "Ship to me (we'll ask for your address when you accept)" : "Local pickup"}</dd>
+            <dd>
+              {request.delivery === "shipping" && request.shippingAddress ? (
+                <>
+                  Ship to me:
+                  {addressLines(request.shippingAddress).map((l) => (
+                    <span key={l} className="block">
+                      {l}
+                    </span>
+                  ))}
+                </>
+              ) : request.delivery === "shipping" ? (
+                "Ship to me"
+              ) : (
+                "Local pickup"
+              )}
+            </dd>
           </div>
           <div>
             <dt className="font-semibold text-ink-soft">Your message</dt>
